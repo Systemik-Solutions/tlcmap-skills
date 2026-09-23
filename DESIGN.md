@@ -12,10 +12,12 @@
 
 The third decision is the one with teeth. It means:
 
-- **The toolkit is a published package, from day one.** Not an implementation detail bundled
-  inside a skill folder — a versioned, tested, installable Python library that TLCMap owns,
-  documents and supports. Skills, MCP server and researchers' own notebooks are all just
-  clients of it.
+- **The toolkit is shared code inside the plugin, structured so it could be extracted later.**
+  A `lib/` directory that every skill's scripts import — the standard skills-with-scripts
+  pattern, supported by Claude Code, Codex and anything else that runs a skill. Publishing it
+  as an installable package is a *separate, later, optional* decision (§4.3), driven by
+  whether "researcher in a notebook, no agent" turns out to be a real audience. It is not a
+  precondition for the skills or for MCP, and nothing in Phase 1 depends on it.
 - **MCP moves forward, and does not wait for the write API.** TLCMap's read API needs no
   authentication, so a hosted read-only MCP server is deployable *now*. That was the
   assumption worth revisiting: MCP was previously tied to auth, but auth is a reason MCP
@@ -27,8 +29,9 @@ The third decision is the one with teeth. It means:
   2,118-request harvest, and it closes the gap for every client at once rather than for each
   user separately. This is now the single highest-value platform change.
 - **Distribution, versioning and support become real constraints.** Third parties will install
-  the plugin; the API is unversioned (§2.4) while the package will be versioned; CI, tests
-  and a compatibility check against production are no longer optional.
+  the plugin, and the API is explicitly unversioned (§2.4). CI, tests and a compatibility
+  check against production are worth having whether or not anything is ever published —
+  they protect the skills, not a package.
 
 ---
 
@@ -265,19 +268,13 @@ Both are clients of the same package (§6) — the same code, two front ends, no
 
 ### 4.2 Packaging
 
-Three deliverables, one repository, deliberately layered so the bottom one can outlive the
-other two.
+A **plugin with a shared library** — the ordinary skills-with-scripts pattern, which is what
+Claude Code, Codex and other skill-running clients already support. No packaging step, no
+install step, nothing published.
 
 ```
 tlcmap-skills/
-├─ packages/
-│  └─ tlcmap/                      # ① the published Python package (§6)
-│     ├─ src/tlcmap/               #    client, query, model, catalogue, resolve,
-│     ├─ tests/                    #    stats, export, views, attribution, provenance
-│     ├─ docs/
-│     └─ pyproject.toml            #    versioned, installable, TLCMap-owned
-│
-├─ .claude-plugin/plugin.json      # ② the skill plugin
+├─ .claude-plugin/plugin.json
 ├─ skills/
 │  ├─ tlcmap-search/SKILL.md
 │  ├─ tlcmap-resolve/SKILL.md
@@ -286,37 +283,70 @@ tlcmap-skills/
 │  ├─ tlcmap-visualise/SKILL.md
 │  ├─ tlcmap-prepare/SKILL.md
 │  └─ tlcmap-cite/SKILL.md
-├─ reference/                      #    cheatsheets the skills load on demand
+│
+├─ lib/tlcmap/          # the shared implementation (§6), imported by the scripts below
+├─ scripts/             # thin CLI entry points the skills invoke
+│  ├─ search.py         #   each carries PEP 723 inline dependency metadata
+│  ├─ harvest.py
+│  ├─ analyse.py
+│  └─ …
+├─ tests/               # unit tests + the production compatibility check
+│
+├─ reference/           # cheatsheets the skills load on demand
 │  ├─ api-quickref.md
 │  ├─ gotchas.md
 │  ├─ data-model.md
 │  └─ views.md
 │
-├─ servers/mcp/                    # ③ the MCP server (Phase 3) — a thin wrapper
-│
-├─ evals/                          # gold sets and skill evals (§10)
-└─ examples/                       # the worked demonstrations (§9)
+├─ evals/               # gold sets and skill evals (§10)
+└─ examples/            # the worked demonstrations (§9)
 ```
 
-**① The package is the asset.** Because TLCMap hosts this, the library is not an internal
-detail of a skill bundle — it is a supported artefact with its own version number, test
-suite and documentation. A researcher can `pip install tlcmap` and use it in a notebook with
-no agent involved at all, which is both a real audience and the thing that keeps the skills
-honest: anything the skills can do, the library can do, reproducibly and without a model.
+**Why `lib/` rather than scripts per skill.** Seven skills would otherwise each carry their
+own copy of the client, and therefore their own copy of the `/maxpaging` detection, the
+missing-`features` check, the `warnnig` misspelling and the date parser. One of them would
+drift, and the failure would be silent — which is exactly the failure mode §3.4 exists to
+prevent. Shared code is the cheap fix, and it costs nothing structurally.
 
-**② The plugin** groups the seven skills so they install, version and update together, and
-share one copy of the toolkit and reference set. Loose skills would each need their own.
+**Dependencies, without an install step.** Each script declares its own dependencies with
+PEP 723 inline metadata, so `uv run scripts/analyse.py` resolves them per-script into an
+ephemeral environment. This matters because the heavier skills want `pandas`, `shapely`,
+`rapidfuzz` and possibly `geopandas`, and nobody should have to install that stack to run
+`tlcmap-search`. It also means the plugin has no setup instructions beyond installing it.
 
-**③ The MCP server** is a thin front end over ① — tool definitions, resource handling and
-(later) token scopes, with no logic of its own.
+**The MCP server, at Phase 3,** is added as `servers/mcp/` in this same repository and
+imports `lib/tlcmap` directly. It needs no packaging either — only a path. Publishing is not
+on its critical path.
 
 **Versioning against an unversioned API.** TLCMap's API is explicitly not versioned (§2.4),
-while the package will be. The package therefore pins the *behaviours* it depends on and
-ships a compatibility check — a small suite run against production that fails loudly when a
-documented quirk changes. When the `udateend` bug is fixed, we should find out from a test,
-not from a wrong map.
+and the skills depend on a dozen documented quirks. `tests/` therefore includes a
+compatibility check run against production that fails loudly when one of them changes. When
+the `udateend` bug is fixed, we should find out from a red test, not from a wrong timeline.
+This is worth having regardless of how the code is distributed.
 
-### 4.3 How a skill is shaped
+### 4.3 On publishing the library — a later, optional decision
+
+An earlier draft of this document called for a published, `pip install`-able package from day
+one. That was wrong, and the correction is worth recording because the reasoning is easy to
+repeat.
+
+Publishing is only required by one audience: **a researcher using the library in a notebook,
+with no agent and without cloning this repository.** Every other consumer — the seven skills,
+the MCP server, our own tests, a researcher who has cloned the repo — reaches `lib/` by path.
+
+So the question is not "should the toolkit be a package" but "is agentless notebook use a
+real audience we intend to serve?" That is a product question, it can be answered any time,
+and answering it late costs nothing **provided one discipline holds now**:
+
+> `lib/tlcmap` contains no agent-specific code — no prompts, no model calls, no assumptions
+> about who is calling it.
+
+That constraint is worth keeping on its own merits (it is what lets the MCP server reuse the
+code, and what makes the analyses reproducible without a model), and it happens to leave
+extraction to a package as a half-day's work rather than a refactor. Preserve the option;
+don't pay for it up front.
+
+### 4.4 How a skill is shaped
 
 Each skill follows the same internal structure, which keeps them predictable and keeps
 token cost low:
@@ -573,14 +603,14 @@ exactly which queries were run and when.
 
 ## 6. The shared toolkit
 
-A plain Python package, `packages/tlcmap/`, with **no agent-specific code in it at all** —
-no prompts, no model calls, no assumptions about a caller. Skills invoke it as a script, the
-MCP server imports it, and a researcher installs it and uses it in a notebook.
+Plain Python in `lib/tlcmap/`, with **no agent-specific code in it at all** — no prompts, no
+model calls, no assumptions about who is calling. The skills' scripts import it, the MCP
+server will import it, and it runs perfectly well in a notebook by anyone who has the repo.
 
-That constraint is deliberate and load-bearing. It is what lets the same code serve three
-front ends, it is what makes the analyses reproducible without an agent, and — given TLCMap
-will own and support this — it is what keeps the maintenance burden on a normal Python
-library rather than on something that only works inside an assistant.
+That one constraint is what matters; it is not a claim about how the code is distributed
+(§4.3). It is what lets the same implementation serve several front ends, what makes the
+analyses reproducible without a model in the loop, and what would make extracting a package
+later a half-day's work if that turns out to be wanted.
 
 ### 6.1 Modules
 
@@ -737,12 +767,12 @@ TLCMap roadmap. See §12.
 
 ### Phase 1 — Core toolkit and the retrieval-to-visualisation path
 
-Package core (`client`, `query`, `model`, `catalogue`, `provenance`, `export`, `views`) with
-its test suite and the production compatibility check, plus `tlcmap-search`,
+`lib/tlcmap` core (`client`, `query`, `model`, `catalogue`, `provenance`, `export`, `views`)
+with its test suite and the production compatibility check, plus `tlcmap-search`,
 `tlcmap-analyse`, `tlcmap-visualise`, `tlcmap-cite`.
 
-Because the package is a supported deliverable, Phase 1 ends with it installable and
-documented, not merely working inside the skills.
+Phase 1 ends with a plugin someone can install and use. Nothing needs publishing, and no
+setup step beyond installing the plugin — the scripts carry their own dependencies (§4.2).
 
 *Platform track, in parallel:* §8.1 items 1–4 — the extent facet above all.
 
@@ -868,14 +898,18 @@ Three are settled — see **Decisions taken** at the top. What remains:
    thing standing between use case 7 and a working managed layer.
 3. **Platform track ownership.** §8.1 is now in-house work. Who does it, and does the extent
    facet land in time for Phase 1 to depend on it rather than ship the harvest workaround?
-4. **NER stack** — spaCy, stanza, or model-based extraction for the geoparsing skill? Affects
-   the install footprint considerably, which matters more now the package is something people
-   install rather than something bundled.
+4. **NER stack** — spaCy, stanza, or model-based extraction for the geoparsing skill? The
+   heaviest dependency question in the project. PEP 723 per-script environments (§4.2) keep
+   it off everyone who is not geoparsing, but a multi-hundred-megabyte model download is
+   still a real cost to the one skill that needs it.
 5. **MCP hosting.** Where does the Phase 3 server run, and does it sit behind the same
    infrastructure as the application? Relevant because §2.3 notes the API has no rate
    limiting, and a public MCP endpoint makes that more pressing.
-6. **Licensing and governance of the capability itself** — the package, the skills and the
-   server are now TLCMap-owned artefacts that third parties will install. What licence, and
-   what support expectation?
+6. **Licensing and governance of the capability itself** — the skills, the toolkit and the
+   server are TLCMap-owned artefacts that third parties will install. What licence, and what
+   support expectation?
 7. **Does the browser interface benefit too?** The extent facet (§6.2) fixes a discovery
    problem the website has as well. Worth confirming before scoping it as agent work.
+8. **Is agentless notebook use a real audience?** The only thing that would justify publishing
+   `lib/tlcmap` as an installable package (§4.3). Answerable at any time, at no cost, as long
+   as the no-agent-code-in-`lib` discipline holds. Nothing in Phases 1–5 depends on it.
