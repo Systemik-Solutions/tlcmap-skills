@@ -294,13 +294,26 @@ assumed:**
 
 The important correction: **a read-only MCP server does not need to wait for the write API.**
 TLCMap's read endpoints need no authentication at all, so a hosted server is deployable as
-soon as the toolkit is stable. Auth is a reason MCP becomes *necessary*; it is not a
+soon as §8.1 Tier 1 is live. Auth is a reason MCP becomes *necessary*; it is not a
 precondition for MCP being *useful*.
 
 The two remain complementary, not alternatives: **MCP supplies tools, skills supply
 judgement.** Neither replaces the other. A tool cannot carry the nine-step pipeline of
 "map the places in this diary", and a skill cannot serve a chatbot on the TLCMap website.
-Both are clients of the same package (§6) — the same code, two front ends, no rewrite.
+
+**They share the API contract, not code.** TLCMap is PHP and Laravel, so the MCP server
+belongs in that stack, inside the application — which means it shares nothing with the Python
+toolkit, and does not need to. Most of `lib/tlcmap` exists to speak HTTP to TLCMap and cope
+with what comes back; a server living inside the application queries the database instead.
+`client.py`, `query.py`, `model.py` and `catalogue.py` simply have no server-side counterpart,
+and the app already emits GeoJSON, CSV, KML and RO-Crate.
+
+The apparent overlap that remains — resolution — dissolves on inspection, because **an MCP
+server should not be making model calls at all.** It exposes tools; the client's model does
+the judging. So candidate generation is a database query that belongs server-side, and
+adjudication belongs to whoever holds the model. No prompts get ported to PHP.
+
+What both are clients of is §8: one contract, two transports.
 
 **MCP design rules, for when we build it:**
 
@@ -315,6 +328,13 @@ Both are clients of the same package (§6) — the same code, two front ends, no
   URL and fetch time, so an MCP-driven answer is as retraceable as a skill-driven one.
 - Read and write tools ship as separate scopes from the start, so a public read-only
   deployment and an authenticated one are the same server configured differently.
+- **The server makes no model calls.** It exposes data and leaves judgement to the client that
+  holds the model. That is what keeps the prompts, the adjudication and the confidence
+  banding in one place (§5.2) rather than reimplemented in PHP.
+- **The tools expose the API contract, nothing more.** A server with direct database access
+  could offer queries the HTTP API cannot, and should not: one contract, two transports, so a
+  question has the same answer whichever way it is asked. Anything worth adding is added to
+  §8 and reaches both.
 
 ### 4.2 Packaging
 
@@ -364,9 +384,10 @@ ephemeral environment. This matters because the heavier skills want `pandas`, `s
 `rapidfuzz` and possibly `geopandas`, and nobody should have to install that stack to run
 `tlcmap-search`. It also means the plugin has no setup instructions beyond installing it.
 
-**The MCP server, at Phase 3,** is added as `servers/mcp/` in this same repository and
-imports `lib/tlcmap` directly. It needs no packaging either — only a path. Publishing is not
-on its critical path.
+**The MCP server is not in this repository.** It is PHP and Laravel, and it lives in the
+TLCMap application (§4.4) — same stack, same deployment, same database and, at Phase 5, the
+same authentication. It shares no code with `lib/`, which is why nothing here needs packaging
+or publishing on its account.
 
 **Versioning against an unversioned API.** TLCMap's API is explicitly not versioned (§2.4),
 and the skills depend on a dozen documented quirks. `tests/` therefore includes a
@@ -382,7 +403,9 @@ repeat.
 
 Publishing is only required by one audience: **a researcher using the library in a notebook,
 with no agent and without cloning this repository.** Every other consumer — the seven skills,
-the MCP server, our own tests, a researcher who has cloned the repo — reaches `lib/` by path.
+our own tests, a researcher who has cloned the repo — reaches `lib/` by path. The MCP server
+is not a consumer at all: it is PHP, it lives in the TLCMap application, and it shares the
+API contract rather than the code (§4.1).
 
 So the question is not "should the toolkit be a package" but "is agentless notebook use a
 real audience we intend to serve?" That is a product question, it can be answered any time,
@@ -391,10 +414,9 @@ and answering it late costs nothing **provided one discipline holds now**:
 > `lib/tlcmap` contains no agent-specific code — no prompts, no model calls, no assumptions
 > about who is calling it.
 
-That constraint is worth keeping on its own merits (it is what lets the MCP server reuse the
-code, and what makes the analyses reproducible without a model), and it happens to leave
-extraction to a package as a half-day's work rather than a refactor. Preserve the option;
-don't pay for it up front.
+That constraint is worth keeping on its own merits — it is what makes the analyses
+reproducible without a model in the loop — and it happens to leave extraction to a package as
+a half-day's work rather than a refactor. Preserve the option; don't pay for it up front.
 
 ### 4.4 How a skill is shaped
 
@@ -691,13 +713,17 @@ exactly which queries were run and when.
 ## 6. The shared toolkit
 
 Plain Python in `lib/tlcmap/`, with **no agent-specific code in it at all** — no prompts, no
-model calls, no assumptions about who is calling. The skills' scripts import it, the MCP
-server will import it, and it runs perfectly well in a notebook by anyone who has the repo.
+model calls, no assumptions about who is calling. The skills' scripts import it, and it runs
+perfectly well in a notebook by anyone who has the repo.
 
-That one constraint is what matters; it is not a claim about how the code is distributed
-(§4.3). It is what lets the same implementation serve several front ends, what makes the
-analyses reproducible without a model in the loop, and what would make extracting a package
-later a half-day's work if that turns out to be wanted.
+Its scope is deliberately narrow: **this is the client side.** It speaks HTTP to TLCMap and
+turns what comes back into something a research workflow can use. The MCP server does not
+import it and does not need to — that server is PHP, lives inside the application, and
+queries the database directly (§4.1). The two share the API contract in §8, not code.
+
+The no-agent-code rule is what matters here, and it is not a claim about distribution (§4.3).
+It is what makes the analyses reproducible without a model in the loop, and what would make
+extracting a package later a half-day's work if that turns out to be wanted.
 
 ### 6.1 Modules
 
@@ -1064,15 +1090,28 @@ This is the demonstration that shows what the model adds beyond a script.
 ### Phase 3 — Read-only MCP server
 
 Brought forward from the tail, because TLCMap is hosting and the read API needs no auth.
-A thin wrapper over the Phase 1–2 package: summary-and-handle tools, resources for bulk
-data, provenance in every result, and read/write scopes separated from the start even though
-only read ships.
 
-**Demonstration 3 — the same question, three front ends.** The Phase 1 research question
-answered through a skill in Claude Code, through the MCP server in Claude Desktop, and
-through the library in a notebook — same code, same numbers, same provenance. For a hosted
-capability this is the demonstration that matters most: it shows TLCMap is building one
-thing, not three.
+**Built in PHP and Laravel, inside the TLCMap application** — not in this repository, and not
+over `lib/tlcmap` (§4.1). It is thin over the app's existing query layer: summary-and-handle
+tools, resources for bulk data, provenance in every result, and read/write scopes separated
+from the start even though only read ships. It makes no model calls of its own.
+
+This is the phase where §8's value compounds, because the MCP tools and the skills express
+the *same contract*. Anything Tier 1 added — the catalogue facet, honest errors, a cheap
+count — is exposed once and consumed twice.
+
+**Demonstration 3 — the same question, three ways.** The Phase 1 research question answered
+through a skill in Claude Code, through the MCP server in Claude Desktop, and through the
+library in a notebook. Different implementations, one contract, and — the part that matters —
+the same numbers and the same provenance. For a hosted capability that is the demonstration
+worth making: it shows TLCMap has one answer, not three.
+
+**Worth checking before committing:** the MCP server SDK ecosystem is considerably thinner in
+PHP than in TypeScript or Python. If the available Laravel tooling proves immature, the
+fallback is a small separate service in a better-supported language that calls the HTTP API —
+which costs a second deployment and a second language for the team to maintain, and loses the
+direct database access that makes Phase 5's auth straightforward. Worth a spike early in
+Phase 2 rather than a surprise at Phase 3.
 
 ### Phase 4 — Text and narrative
 
@@ -1085,8 +1124,11 @@ it came from, viewable in TLCMap's own Full Text view.
 ### Phase 5 — Write
 
 Contingent on §8.4. Adds scoped token handling to the MCP server, `push` to
-`tlcmap-prepare`, and unblocks use case 7's managed layer. The server built in Phase 3 is
-where the credential lives; nothing needs restructuring to get here.
+`tlcmap-prepare`, and unblocks use case 7's managed layer.
+
+Building the Phase 3 server inside the Laravel application pays off here: it already has the
+session, user and permission model, so scoped tokens are an extension of existing
+authorisation rather than a parallel system. Nothing needs restructuring to get here.
 
 ### Sequencing note
 
@@ -1180,9 +1222,13 @@ Three are settled — see **Decisions taken** at the top. What remains:
    narrower: **what does extraction cost on a realistic corpus?** Worth measuring on a real
    Trove export early in Phase 4, because it sets the tiering threshold in §5.3 and it is the
    one place in the design with a per-token cost that scales with the researcher's data.
-5. **MCP hosting.** Where does the Phase 3 server run, and does it sit behind the same
-   infrastructure as the application? Relevant because §2.3 notes the API has no rate
-   limiting, and a public MCP endpoint makes that more pressing.
+5. **MCP server tooling in PHP.** The Phase 3 server belongs in the Laravel application
+   (§4.1), but the MCP SDK ecosystem is much thinner in PHP than in TypeScript or Python.
+   Worth a spike early in Phase 2 to confirm the available tooling is good enough, because
+   the alternative — a separate service in another language — costs a second deployment and
+   loses the direct database access that makes Phase 5's scoped tokens straightforward.
+   Also settle where it runs and whether it shares the application's infrastructure, since
+   §2.3 notes there is no rate limiting and a public MCP endpoint makes that more pressing.
 6. **Licensing and governance of the capability itself** — the skills, the toolkit and the
    server are TLCMap-owned artefacts that third parties will install. What licence, and what
    support expectation?
