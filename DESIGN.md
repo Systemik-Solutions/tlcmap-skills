@@ -757,41 +757,47 @@ The corresponding prerequisites are §8.1 ①–④ and §8.2 ⑤–⑦.
 
 ## 7. Use cases mapped
 
-| # | Use case from the brief | Skills | Gaps |
-| --- | --- | --- | --- |
-| 1 | Historical text → mapped corpus | geoparse → resolve → visualise → prepare | Upload is manual |
-| 2 | Spreadsheet enrichment | resolve → cite | Fully supported today |
-| 3 | Regional fieldwork brief | search → analyse → visualise → cite | Needs the extent index |
-| 4 | Indigenous / colonial co-mapping | search → cite → visualise | Licence is free text; **human gate required** |
-| 5 | Toponym pattern analysis | search (`/api` harvest) → analyse → visualise | Fully supported today |
-| 6 | Environmental / event history overlay | geoparse → resolve → analyse → visualise | External data sources are the researcher's |
-| 7 | Longitudinal managed layer | prepare → *(write API)* → visualise | **Blocked**: no write, no change feed |
-| 8 | Teaching storymaps | search → visualise | Fully supported today |
+Full descriptions — example prompts, the researcher, the pipeline step by step, what the
+skills do *not* do, and a worked example from real TLCMap data for each — are in
+**[USE-CASES.md](./USE-CASES.md)**. This table is the mapping; that document is the detail.
 
-Five of eight are fully deliverable against today's read-only API. One is partly blocked, one
-needs a human gate by design, and one needs the extent index we are building anyway.
+| # | Use case | Skills | Prerequisites | Phase |
+| --- | --- | --- | --- | --- |
+| [1](./USE-CASES.md#1-historical-text--mapped-corpus) | Historical text → mapped corpus | geoparse → resolve → visualise → prepare | ②③⑨⑩⑪ | 4 |
+| [2](./USE-CASES.md#2-place-based-corpus-enrichment) | Place-based corpus enrichment | resolve → cite | ⑨⑩⑪ | 2 |
+| [3](./USE-CASES.md#3-regional-knowledge-synthesis-for-fieldwork) | Regional fieldwork brief | search → analyse → visualise → cite | ① | 1 |
+| [4](./USE-CASES.md#4-indigenous--colonial-name-co-mapping) | Indigenous / colonial co-mapping | search → cite → visualise | ⑮ (to *assist* only) | any — **human-gated** |
+| [5](./USE-CASES.md#5-toponym-pattern-analysis) | Toponym pattern analysis | search (`/api` harvest) → analyse → visualise | ③ | 1 |
+| [6](./USE-CASES.md#6-environmental--event-history-overlay) | Environmental / event history overlay | geoparse → resolve → analyse → visualise | ⑥⑦ | 1 or 4 |
+| [7](./USE-CASES.md#7-comparative--longitudinal-mapping-of-a-single-concept) | Longitudinal managed layer | prepare → *(write API)* → visualise | ⑭ + §8.4 | 5 — **blocked** |
+| [8](./USE-CASES.md#8-teaching--public-facing-storymaps) | Teaching storymaps | search → visualise | ⑥ (improves) | 1 |
+
+Circled numerals are the API items in §8.
+
+**Where the eight actually stand.** Four reach Phase 1. One (2) needs only the resolver. One
+(7) is genuinely blocked, on the write API and a change feed. One (4) is limited by ethics
+rather than capability and is human-gated by design at every phase — the technical work there
+is easy and deliberately not the point. And one (6) splits: immediate against an existing
+layer such as 170, Phase 4 where it needs text extraction first.
 
 ### Additional capabilities worth including
 
-These are not in the brief but are cheap, high-value, and directly serve TLCMap's community.
+Not in the brief, but cheap, high-value and directly useful to TLCMap's own community —
+described in full under
+[Additional capabilities](./USE-CASES.md#additional-capabilities).
 
-- **Layer health report** *(in `tlcmap-prepare`)* — point it at any public layer and get a
-  data-quality assessment: unparseable dates, implausible coordinates, duplicate records,
-  headings that were mangled on import, missing licence or citation. Useful to contributors,
-  and an excellent low-risk first demonstration.
-- **Cross-layer duplicate detection** *(in `tlcmap-analyse`)* — when composing a multilayer,
-  find records that are the same place in different layers, so a merged map does not
-  triple-count. Closeness analysis plus local matching.
-- **Resolution evaluation harness** *(in `evals/`)* — a gold set of hand-checked
-  placename→UID pairs, so we can state a precision/recall figure for `tlcmap-resolve`
-  instead of asserting it works. Research credibility depends on this, and it is what makes
-  the proof of concept a *proof*.
-- **Reproducible notebook emission** *(in `tlcmap-analyse`)* — already described, but worth
-  calling out as a deliverable in its own right: the skill's output includes the means to
-  verify the skill.
-- **Saved-search awareness** — a TLCMap saved search is a stored query, not a stored result.
-  Skills should prefer emitting a re-runnable query URL over a frozen extract wherever the
-  research question is ongoing.
+- **Layer health report** *(in `tlcmap-prepare`)* — point it at any public layer and get
+  unparseable dates, implausible coordinates, duplicates, headings mangled on import, and
+  missing licence or citation. The import is strict and its failures are opaque; this turns
+  them into a list a contributor can act on. **The lowest-risk first demonstration available.**
+- **Cross-layer duplicate detection** *(in `tlcmap-analyse`)* — so a merged multilayer does
+  not triple-count the same township.
+- **Resolution evaluation harness** *(in `evals/`)* — a gold set giving precision, recall and
+  abstention rate. It is what makes the proof of concept a *proof* rather than a demo.
+- **Reproducible notebook emission** *(in `tlcmap-analyse`)* — every analysis ships the means
+  to verify it.
+- **Saved-search awareness** — a saved search is a stored query, not a stored result. Prefer
+  a re-runnable query URL over a frozen extract where the question is ongoing.
 
 ---
 
@@ -1165,7 +1171,10 @@ A proof of concept that cannot be measured is a demonstration, not a proof.
 - **Query correctness.** A fixture suite of natural-language requests with known-correct API
   queries, checking the model picks the right parameter and avoids the traps.
 - **Skill triggering.** Eval suites (via `skill-creator`) confirming each skill activates on
-  its intended requests and not on the others'.
+  its intended requests and not on the others'. The fixtures come from the example prompts
+  in [USE-CASES.md](./USE-CASES.md) — including the *push-back* prompts, which test that a
+  skill declines to fabricate a coordinate or to proceed past a rights gate. Those are the
+  cases where a confident wrong answer is worst, so they are the ones worth a regression test.
 - **Provenance integrity.** An automated check that every coordinate in every output traces
   to a cached API response. This should be impossible to fail, and tested as if it were not.
 - **Courtesy.** Request counts per demonstration run, kept visible and kept low.
