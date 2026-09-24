@@ -1,6 +1,6 @@
 # TLCMap AI Skills — design and plan
 
-**Status:** draft for discussion · **Date:** 2026-09-23 · **Phase:** design, nothing implemented
+**Status:** draft for discussion · **Date:** 2026-09-24 · **Phase:** design, nothing implemented
 
 ## Decisions taken
 
@@ -24,11 +24,12 @@ The third decision is the one with teeth. It means:
   becomes *necessary*, not a precondition for it being *useful*. A server at
   `mcp.tlcmap.org` reaches Claude Desktop, a chatbot on the TLCMap site, and any other agent
   framework — audiences a skill plugin cannot.
-- **Platform gaps get fixed in the platform, not worked around in the skills** (§3.8). Now
-  that both sides are in-house, §8 is a prioritised work programme rather than a wishlist,
-  and each item is measured by the client-side code it deletes. The layer extent facet is the
-  worked example: one `GROUP BY dataset_id` on the server replaces a 2,118-request harvest in
-  every installation, and fixes the browser interface too.
+- **Platform gaps get fixed in the platform** (§3.8). Both sides are in-house and there is a
+  single deployment, so §8 is a list of **prerequisites** on the critical path — not gaps the
+  skills route around. This design contains no workarounds, no fallbacks and no feature
+  detection; a skill ships when its prerequisite is live (§8.6). The layer extent facet is the
+  worked example: one `GROUP BY dataset_id` on the server, which fixes the browser interface
+  at the same time.
 - **Distribution, versioning and support become real constraints.** Third parties will install
   the plugin, and the API is explicitly unversioned (§2.4). CI, tests and a compatibility
   check against production are worth having whether or not anything is ever published —
@@ -109,46 +110,24 @@ ACTUAL bbox   : lon 4.7978..116.2544   lat -34.3568..53.0548
 
 So **layer discovery by region is impossible from the catalogue**, and there is no `bbox`
 parameter on `/layers/json` to do it server-side either. That blocks use case 3 and half of
-use case 4. Three routes around it, all unattractive:
+use case 4.
 
-1. **Harvest** all 2,118 layer feeds and compute extents locally — correct, but 2,118 requests
-   against a server with no rate limiting, repeated by every installation (§6.2).
-2. **Search records by bbox and group by layer** — restrict to contributed layers and read
-   the `TLCMapDataset` property off each feature:
-
-   ```
-   GET /places?format=json&bbox=151.0,-33.0,151.2,-32.8&searchpublicdatasets=on
-     → features[].properties.TLCMapDataset = "https://tlcmap.org/publicdatasets/461"
-   ```
-
-   Cheap for a sparse region, but it inherits the 5,000-match ceiling and fails exactly where
-   a region is richest — and the ceiling `302`s to HTML rather than truncating, so it fails
-   hard. It could be rescued by subdividing the bbox into quadrants recursively until every
-   cell comes back under the ceiling, which converts a hard failure into more requests.
-3. Keyword-match layer descriptions and hope the region is named in the prose.
-
-**None of the three should be built if the API can be changed instead**, and it can — see
-§3.8 and §8.1 ①. One `GROUP BY dataset_id` with `ST_Extent` on the server makes this a
-one-request lookup for every client, including the browser interface, which has the same
-problem. The routes above are recorded as fallbacks for deployments that have not taken the
-change, not as the design.
+The fix is one `GROUP BY dataset_id` with `ST_Extent` on the server, exposed as a catalogue
+facet — **§8.1 ①, a prerequisite for `tlcmap-search`** and the highest-value change on the
+list. It fixes the same discovery gap in the browser interface at the same time.
 
 ::: warning
-**The four declared extents that do exist cannot be trusted either.** Layer 284 declares
-`latitude_from: -10, latitude_to: -30` — "from" is *north* of "to". Layer 1341 declares
-`longitude_to: 182.167965`, outside the valid ±180 range. Any declared extent must be
-validated against the records before use, which argues for computing extents rather than
-reading them even after the field is better populated.
+**Compute the extents; do not promote the declared fields.** The four that exist cannot be
+trusted either: layer 284 declares `latitude_from: -10, latitude_to: -30` — "from" is *north*
+of "to" — and layer 1341 declares `longitude_to: 182.167965`, outside the valid ±180 range.
+Keep the contributor-supplied values as a separate hint, and derive the facet from geometry.
 :::
-
-A layer-extent index is therefore a first-class component of the toolkit (§6.2), and a
-server-side facet is the top platform change (§8.1) — one `GROUP BY dataset_id` with
-`ST_Extent` fixes it for every client at once.
 
 ### 2.3 Behaviours that will break a naive client
 
-Every one of these is a silent failure — wrong data, not an error. The toolkit exists in
-large part to absorb them.
+Every one of these is a silent failure — wrong data, not an error. This table is the evidence
+base for §8: each row is something the API should stop doing, not something the toolkit
+should learn to survive (§3.8). The right-hand column is why each one matters.
 
 | Trap | Consequence |
 | --- | --- |
@@ -219,15 +198,24 @@ for cultural sensitivity notices. If data is republished, the warning is republi
 it. Layers relating to Indigenous knowledge are routed to a human decision, never an
 automated one. (CARE principles; see §11.)
 
-### 3.4 Assert, never assume
+### 3.4 Report what was excluded
 
-Because the API fails silently, the client verifies rather than trusts:
+The API will report its own failures honestly once §8.1 ② lands — a rejected filter is a
+`400`, a private layer is a `403`, an oversized result is a `413` — so the client checks
+status codes rather than sniffing content types. That is the whole of error handling, and it
+is why none of it appears in the toolkit.
 
-- An `extended_data` filter is run twice — with and without — and the counts compared. Equal
-  counts mean the expression was discarded; that is raised as an error.
-- A response missing `features` is a private-or-missing layer, not an empty result.
-- A response whose content type is HTML is the `/maxpaging` redirect.
-- A sorted result is compared against the unsorted count, and the drop is reported.
+What remains is not error handling but *honesty about scope*, and it stays:
+
+- **Exclusions are reported, always.** A dated search leaves out undated records; a sorted
+  one leaves out records with no date to sort by. "216 records, 55 of them dated" is the
+  truthful version of a temporal claim, and every summary carries it.
+- **Contributor-supplied metadata is evidence, not fact.** Declared extents can be malformed
+  (§2.2), licences are free text (§3.3), and extended-data values are untyped strings. These
+  are properties of community-contributed data, not API defects, and no endpoint will fix
+  them. Validate, surface, and never silently repair.
+- **Model output is verified against the cache** (§3.1). That guards against the model, not
+  the API, so it is unaffected by anything in §8.
 
 ### 3.5 Files, not context
 
@@ -249,26 +237,24 @@ model is visibly not the source of the statistics.
 
 ### 3.8 Fix it upstream
 
-TLCMap owns the API and this capability both. So when the skills hit a platform limitation,
-the default is to **change the platform**, not to accumulate cleverness in the client.
+TLCMap owns the API and this capability both, and there is exactly **one deployment** —
+tlcmap.org. So where the skills need something the API does not do, the API changes.
 
-A workaround is not free. It is code to write, test, document and carry indefinitely; it
-usually costs extra requests against a server with no rate limiting; it is invisible to every
-other TLCMap client, which keeps hitting the same wall; and it tends to outlive the problem,
-because nobody remembers it was temporary. Layer discovery by region is the clearest case —
-either 2,118 harvest requests per installation and a recursive bbox-subdivision algorithm, or
-one `GROUP BY dataset_id` on the server. Same outcome, and the second fixes the browser
-interface too.
+This design therefore contains **no workarounds, no fallbacks and no feature detection**. A
+client-side workaround would be code written, tested, documented and maintained indefinitely,
+to defend against behaviour we control, on behalf of an installed base of one — while every
+other TLCMap client keeps hitting the same wall. Layer discovery by region is the clearest
+case: either a 2,118-request harvest plus a recursive bbox-subdivision algorithm in every
+client, or one `GROUP BY dataset_id` on the server that fixes the browser interface at the
+same time.
 
-The test is: *would this workaround still be worth writing if the API change were free?* If
-not, it is a scheduling decision, not a design one, and it should be marked as interim
-(§8.6).
+§8 is accordingly a list of **prerequisites**, not of gaps to route around. Each item names
+the skills that depend on it and the phase it must land by. The skills are written against
+the API as it will be, and a skill whose prerequisite has not landed simply does not ship
+yet — it does not ship with a workaround.
 
-Two honest qualifications. A client-side fallback is still needed where the skills must run
-against a deployment that has not taken the change — so workarounds get written, but they get
-written *behind feature detection and tagged for deletion*, not as the design. And §8.5 sets
-out what genuinely belongs in the client: judgement, disambiguation and ethics do not become
-endpoints.
+One boundary this does not cross: §8.5 sets out what genuinely belongs in the client.
+Judgement, disambiguation and ethics do not become endpoints.
 
 ---
 
@@ -474,12 +460,11 @@ The decision procedure it encodes:
 - **Which endpoint.** `/places` for a bounded result set; `/api` for harvesting — with the
   trade-off stated plainly, because `/api` cannot see contributed layers.
 - **Region.** bbox or polygon, longitude first, ring closed, antimeridian handled.
-- **Ceiling strategy.** When a query exceeds 5,000 matches: narrow by region, date or
-  feature term, or switch to `/api`, or read the layers directly. **Never** `limit`.
-  *This whole branch disappears if §8.1 ③ lands and `/api` covers contributed layers — it is
-  the most complex logic in the skill and it exists only to route around the ceiling.*
-- **Layer discovery.** One faceted catalogue request once §8.1 ① lands; until then, keyword
-  match over the cached catalogue plus the fallbacks in §2.2.
+- **Result size.** `/api` pages through any number of matches across all sources (§8.1 ③), and
+  `count=true` says how many there are before committing to the fetch (④). Large results are a
+  question to put to the researcher, not an obstacle to route around. **Never** `limit`.
+- **Layer discovery.** One faceted catalogue request — keyword, region, date, record type
+  (§8.1 ①).
 
 **Outputs.** `records.geojson` (cached, checksummed), `query.json` (the canonical
 `metadata.url`, re-runnable), `summary.md` (counts, extent, date range, source breakdown,
@@ -682,10 +667,10 @@ later a half-day's work if that turns out to be wanted.
 
 | Module | Responsibility |
 | --- | --- |
-| `client.py` | HTTP with caching, retry, courtesy delay. Detects the `/maxpaging` HTML redirect, the missing-`features` private-layer response and the `warnnig` misspelling. Raises typed errors instead of returning wrong data. |
-| `query.py` | Safe parameter construction. Validates bbox longitude order, closes polygon rings, formats `extended_data` with its required spaces **and verifies the filter was actually applied** by comparing filtered and unfiltered counts. |
-| `model.py` | One canonical `Record` regardless of which naming convention the response used (GeoJSON `id` / layer CSV `ghap_id` / analysis output). Separates defined fields from extended data by cross-checking the layer CSV header. Parses all eight date forms including BCE. Recomputes `udateend` from `dateend` to work around the search-output bug. |
-| `catalogue.py` | Layer discovery: keyword, creator, licence and — once §8.1 ① lands — region and date, in one request. Until then, caches the 2,118-layer catalogue and falls back to the extent harvest (§6.2), behind feature detection. Treats any contributor-declared extent as a hint to validate, never as fact. |
+| `client.py` | HTTP with caching, retry and courtesy delay. Maps the API's status codes to typed errors (requires §8.1 ②). No content-type sniffing — a `413`, `403` or `400` says what happened. |
+| `query.py` | Safe parameter construction. Validates bbox longitude order and closes polygon rings before sending. A malformed `extended_data` expression comes back as a `400` naming it (§8.1 ②), so the client does not second-guess the server. |
+| `model.py` | One canonical `Record` regardless of which naming convention the response used (GeoJSON `id` / layer CSV `ghap_id` / analysis output). Reads extended data from its own namespace (§8.2 ⑤) rather than inferring it. Parses all eight date forms including BCE. |
+| `catalogue.py` | Layer discovery in one faceted request — keyword, creator, licence, region, date (requires §8.1 ①). Treats any contributor-declared extent as a hint, never as fact. |
 | `resolve.py` | Candidate generation, prior application, fuzzy pre-ranking, evidence packaging for adjudication, confidence banding, review-bucket routing. |
 | `stats.py` | Spatial and temporal statistics computed locally: hull, centroid, nearest-neighbour, KDE, Ripley's K, per-period counts, categorical breakdowns. |
 | `export.py` | GeoJSON with TLCMap `display` configuration, upload-format CSV, KML, GPX, QGIS project, RO-Crate bundle. Runs the coordinate-provenance validator before writing. |
@@ -693,27 +678,18 @@ later a half-day's work if that turns out to be wanted.
 | `attribution.py` | Layer metadata collection, attribution block rendering, warning propagation, sensitivity flagging. |
 | `provenance.py` | The manifest: every URL fetched, when, with what checksum; every model judgement with its evidence. |
 
-### 6.2 The layer extent index
+### 6.2 What the toolkit deliberately does not contain
 
-**This should not be built client-side.** It is the worked example behind §3.8, and behind
-the reframing of §8 as a work programme rather than a wishlist.
+Earlier drafts had the toolkit carrying a layer extent index — a harvest of all 2,118 layer
+feeds — plus recursive bbox subdivision to stay under the result ceiling, content-type
+sniffing to catch HTML redirects, a run-the-query-twice check to detect discarded filters,
+and re-derivation of `udateend` from `dateend`.
 
-Computing every layer's true bounding box, date range and record count is one PostGIS query
-grouped by `dataset_id`, refreshed when a layer changes — against a client-side harvest of
-2,118 layer feeds that every installation repeats and keeps fresh independently. The
-server-side version is less code, fewer requests, always current, and fixes the same
-discovery gap in the browser interface. It is **§8.1 ① and the highest-value change on the
-list.**
+**None of it is being built.** Each was a workaround for something §8 fixes at the source
+(§3.8), and with one deployment there is nobody to carry them for. They are recorded here
+only so the decision reads as deliberate rather than forgotten.
 
-What the toolkit ships instead is a **fallback, not an architecture**: behind feature
-detection, tagged for deletion (§8.6), used only against a deployment that has not taken the
-change. It is polite by construction — rate limited, resumable, cached, run once rather than
-per session.
-
-The recursive quadrant subdivision described in §2.2 falls into the same category, and is
-worth being clearer about: it is a genuinely clever way to work around a ceiling that should
-not be in the client's way at all. If §8.1 ① and ③ land, **it should not be written.** It is
-listed here so that the decision to skip it is deliberate rather than forgotten.
+The corresponding prerequisites are §8.1 ①–④ and §8.2 ⑤–⑦.
 
 ---
 
@@ -759,14 +735,14 @@ These are not in the brief but are cheap, high-value, and directly serve TLCMap'
 
 ## 8. API enhancements — the platform half of this project
 
-TLCMap owns both the API and this capability. That makes every skill-side workaround a
-self-inflicted maintenance cost: code we write, test, document and carry forever, to defend
-against behaviour we could simply change. **The default is therefore to fix it upstream**
-(§3.8), and the list below is a work programme rather than a wishlist.
+TLCMap owns both the API and this capability, and runs exactly one deployment. So these are
+**prerequisites for the skills**, not gaps the skills will route around (§3.8) — a work
+programme on the critical path rather than a wishlist.
 
-Each item names what it deletes from the toolkit, because that is the measure of its value.
+Each item names the skills that depend on it and the phase it is needed by. §8.6 summarises
+that as a schedule.
 
-### 8.1 Tier 1 — each removes a whole class of workaround
+### 8.1 Tier 1 — required by Phase 1
 
 **① Layer extent and facets on the catalogue.**
 
@@ -781,9 +757,9 @@ with computed `bbox`, `date_range` and `record_count` on every entry. One PostGI
 and two of those four are malformed (§2.2). Keep them as a separate contributor hint; do not
 promote them to the facet.
 
-> **Deletes:** the 2,118-request extent harvest (§6.2), the recursive quadrant subdivision,
-> and the 2.7 MB catalogue download on every session. Also fixes the same discovery gap in
-> the browser interface. **The single highest-value change.**
+> **Required by:** `tlcmap-search` (layer discovery), `tlcmap-cite` (finding layers by rights
+> status), use cases 3 and 4. Also fixes the same discovery gap in the browser interface.
+> **The single highest-value change.** Needed by Phase 1.
 
 **② Honest errors instead of HTML redirects.**
 
@@ -817,9 +793,8 @@ There is a second-order trap in the same table. `id=` redirects to the path form
 `/maxpaging` HTML with a `200`. The API currently requires clients to both follow and not
 follow redirects.
 
-> **Deletes:** all content-type sniffing in `client.py`, the missing-`features` heuristic, the
-> `warnnig` special case, and the run-the-query-twice-and-compare-counts check in `query.py`
-> that §3.4 exists to justify.
+> **Required by:** every skill, because it is the difference between `client.py` reading a
+> status code and `client.py` guessing from content types. Needed by Phase 1.
 
 **③ Extend `/api` to contributed layers.**
 
@@ -827,10 +802,9 @@ follow redirects.
 gazetteers only. Contributed layers — the research data — are reachable only through
 `/places`, which is the endpoint with the ceiling.
 
-> **Deletes:** the entire "ceiling strategy" decision tree in `tlcmap-search` (narrow by
-> region? by date? switch endpoint? read layers individually?), and most of the reason
-> quadrant subdivision was ever considered. Probably the best value-to-effort ratio on the
-> list, since the paging machinery already exists.
+> **Required by:** `tlcmap-search` and `tlcmap-analyse` for any question spanning contributed
+> layers — which is most research questions. Probably the best value-to-effort ratio on the
+> list, since the paging machinery already exists. Needed by Phase 1.
 
 **④ A cheap count.**
 
@@ -841,8 +815,8 @@ Today a client cannot ask how big a result set is without running the query, and
 is exactly what fails when it is large: `paging=1` on a 94,615-match query still `302`s,
 because the ceiling is checked against the total, not the page.
 
-> **Deletes:** the guess-then-recover logic around every large query, and makes "this will
-> return 94,615 records, shall I narrow it?" answerable before spending the request.
+> **Required by:** `tlcmap-search`, to answer "this will return 94,615 records, shall I narrow
+> it?" before spending the request. Needed by Phase 1.
 
 ### 8.2 Tier 2 — data correctness
 
@@ -850,15 +824,15 @@ because the ceiling is checked against the total, not the page.
 than merged into `properties`, where a contributor's column named `description` or `source`
 silently overwrites the built-in field and nothing in the output says which is which.
 
-> **Deletes:** the layer-CSV-header diffing in `model.py` — currently the only way to tell a
-> contributor's field from a defined one. Needs a transition period, since existing clients
-> read the merged form.
+> **Required by:** `model.py`, and therefore everything downstream of it — without it there is
+> no reliable way to tell a contributor's field from a defined one. Note this one changes an
+> existing response shape, so it needs a transition for current clients. Needed by Phase 1.
 
 **⑥ Fix `udateend` in search output.** It is computed from the start date, so every record
 reports `udateend == udatestart` and every timeline built from a search shows instants.
 
-> **Deletes:** date re-derivation in `model.py`, and the caveat in `tlcmap-visualise` that
-> forces layer feeds where a search feed would have done.
+> **Required by:** `tlcmap-visualise` (timelines built from searches) and `tlcmap-analyse`
+> (any temporal claim over search results). Needed by Phase 1.
 
 **⑦ Stop `sort` and date filters silently discarding records.** `sort` drops every record
 with neither start nor end date — 216 results become 55. Dated searches exclude undated
@@ -866,8 +840,9 @@ records entirely. Both are defensible defaults and neither is escapable.
 
 Add `nulls=last` to `sort`, and `include_undated=true` to date filtering.
 
-> **Deletes:** fetch-everything-and-sort-locally, which is both wasteful and impossible above
-> the ceiling.
+> **Required by:** `tlcmap-search` and `tlcmap-analyse`. Without it, honest temporal analysis
+> means fetching everything and sorting locally, which is impossible above the ceiling.
+> Needed by Phase 1.
 
 **⑧ Make `limit` deterministic; add `sample`.** `limit` currently does `shuffle()` then
 `take()`, so identical requests return different records. Make `limit=N` take the first N,
@@ -878,8 +853,9 @@ should not silently mean the surprising one.
 results and then discarded. Exposing it as a property, and allowing a threshold, would give
 `tlcmap-resolve` a server-computed signal it currently cannot obtain at any price.
 
-> **This one cannot be worked around client-side at all** — the score simply is not available.
-> It is the only item on the list where the API is the sole possible source.
+> **Required by:** `tlcmap-resolve`. **This is the one item that cannot be obtained any other
+> way** — the score is computed and discarded, and no client can recover it. Needed by
+> Phase 2.
 
 ### 8.3 Tier 3 — friction
 
@@ -895,13 +871,15 @@ N candidates and must make N requests.
 GET /vocabularies/{feature_term|state|lga|parish}/json
 ```
 
-> **Deletes:** hardcoded vocabulary lists in the toolkit, which would rot silently.
+> **Required by:** `tlcmap-search` and `tlcmap-resolve`, which otherwise cannot construct a
+> valid `state`, `lga` or `feature_term` filter at all. Needed by Phase 2.
 
 **⑫ Statistics as JSON.** `basicstatistics/json` returns geometry only — hull, centroid, box
 — while the actual numbers (count, area, density, date range, median, mean) are computed for
 the HTML page and thrown away. Advanced statistics has no JSON endpoint at all.
 
-> **Deletes:** local recomputation in `stats.py` of numbers the server already calculates.
+> **Required by:** `tlcmap-analyse`, which otherwise recomputes locally what the server
+> already calculates for its own HTML page. Needed by Phase 1.
 
 **⑬ DBScan distance in real units.** `distance` is labelled kilometres, divided by 100, and
 passed to PostGIS as degrees on a geometry — so its meaning changes with latitude and no
@@ -910,8 +888,8 @@ caller can reason about it. Accept metres against geography.
 **⑭ Conditional requests and a change feed.** `ETag` / `Last-Modified` on feeds, and
 `?updated_since=` on layers and the catalogue.
 
-> **Deletes:** refetch-everything-and-diff in use case 7's scheduled pipeline — the ugliest
-> workaround in the design, and the one that would hammer the server hardest.
+> **Required by:** use case 7's scheduled pipeline, which otherwise refetches and diffs
+> everything on every run. Needed by Phase 5.
 
 **⑮ A structured licence identifier** alongside the free-text field — SPDX or a CC code. The
 free text stays and is still what gets displayed; the identifier lets a client *assist* a
@@ -967,17 +945,26 @@ work, and no API change would or should absorb them:
 | Longitude-first `bbox` | Correct GeoJSON convention, not a defect |
 | The date formats themselves | A genuine feature — mixed `1856` / `1856-03` / `-400` is right for historical data |
 
-### 8.6 Keeping the two halves honest
+### 8.6 Prerequisite summary
 
-The risk with a workaround is that it outlives the problem. Two practices:
+What must land before each phase can ship. There is one deployment, so "landed" means
+deployed to tlcmap.org — there is no capability negotiation and no fallback path (§3.8).
 
-1. **A workaround register.** Every interim workaround in the toolkit is tagged in code with
-   the §8 item that would delete it — `# WORKAROUND(api-8.1.2): remove when /places returns
-   413` — so they are findable and removable rather than becoming folklore.
-2. **Feature detection, not version pinning.** The client probes for a capability once and
-   caches the answer, so a deployment that has the facet uses it and one that has not falls
-   back. Since the API is unversioned (§2.4), this is also how the compatibility suite in
-   `tests/` knows what to assert.
+| Phase | Prerequisites | Without them |
+| --- | --- | --- |
+| **1** — search, analyse, visualise, cite | ① catalogue facet · ② honest errors · ③ `/api` over contributed layers · ④ cheap count · ⑤ namespaced extended data · ⑥ `udateend` fix · ⑦ `nulls=last` / `include_undated` · ⑫ statistics as JSON | Regional discovery, honest temporal analysis and reliable field identification are all unavailable. Phase 1 does not ship. |
+| **2** — resolve, prepare | ⑨ match score · ⑩ bulk fetch by ID · ⑪ vocabulary endpoints · ⑯ import fixes and validation dry run | The resolver loses its one server-side signal, and `tlcmap-prepare` cannot validate before upload |
+| **3** — MCP server | ⑱ published rate limits | A public endpoint with no stated limit |
+| **4** — geoparse, narrative | *(none beyond Phase 2)* | — |
+| **5** — write | ⑭ conditional requests · §8.4 write API | Use case 7 stays blocked |
+
+⑧ (deterministic `limit`), ⑬ (DBScan units), ⑮ (structured licence) and ⑰ (small defects)
+are not blocking, and can land whenever convenient.
+
+The compatibility suite in `tests/` asserts each of these behaviours against production, so a
+regression in the API shows up as a failing test rather than as a wrong map. Since the API is
+unversioned (§2.4), that suite is the only thing standing between a silent platform change
+and a silently wrong research output.
 
 ---
 
@@ -986,21 +973,15 @@ The risk with a workaround is that it outlives the problem. Two practices:
 Scope, split and audience are settled (see **Decisions taken**). The sequence below reflects
 them: broad Phase 1, seven skills, and MCP pulled forward out of the tail.
 
-Two tracks run in parallel and are **equally first-class**: the **capability track** (toolkit,
-skills, server) and the **platform track** (§8). Per §3.8 the platform track is not a
-follow-up — several Phase 1 skills are materially simpler if Tier 1 lands alongside them, and
-two planned workarounds disappear entirely.
+Two tracks run in parallel and are **equally first-class**: the **platform track** (§8) and
+the **capability track** (toolkit, skills, server). Per §3.8 the platform track is not a
+follow-up and not optional — it is on the critical path, because the skills are written
+against the API as it will be and ship when their prerequisites do (§8.6).
 
-The sequencing question that matters most: **does §8.1 Tier 1 land with Phase 1, or after it?**
-
-| If Tier 1 lands with Phase 1 | If it lands later |
-| --- | --- |
-| No extent harvest, no quadrant subdivision, no content-type sniffing | All three get written behind feature detection, tagged for deletion (§8.6) |
-| `tlcmap-search` has no ceiling-strategy branch | The branch exists and is the most complex logic in the skill |
-| Roughly a third less code in `client.py` and `catalogue.py` | That code ships, and someone maintains it until the API changes |
-
-Neither path blocks Phase 1. The first is considerably cheaper, and the difference is a
-scheduling decision rather than a design one.
+**The platform track leads.** Each phase below names what must be deployed to tlcmap.org
+first. In practice the two can be built concurrently — the API changes are small and mostly
+independent — but a skill is not finished until its prerequisite is live, and none of them
+will be given a temporary implementation in the meantime.
 
 ### Phase 0 — Agree the design *(this document)*
 
@@ -1016,9 +997,10 @@ with its test suite and the production compatibility check, plus `tlcmap-search`
 Phase 1 ends with a plugin someone can install and use. Nothing needs publishing, and no
 setup step beyond installing the plugin — the scripts carry their own dependencies (§4.2).
 
-*Platform track, in parallel:* §8.1 Tier 1 — the catalogue facet ①, honest errors ②,
-`/api` over contributed layers ③, and a cheap count ④. Each one deletes code from this phase
-rather than adding to it.
+*Platform prerequisites (§8.6):* ① catalogue facet, ② honest errors, ③ `/api` over contributed
+layers, ④ cheap count, ⑤ namespaced extended data, ⑥ `udateend` fix, ⑦ `nulls=last` /
+`include_undated`, ⑫ statistics as JSON. These are deployed to tlcmap.org before the phase is
+complete; the skills are written against them.
 
 **Demonstration 1 — the brief's own sentence, end to end.** *"Find records in this TLCMap
 dataset relating to a particular subject, period or region, analyse their spatial and
@@ -1072,10 +1054,18 @@ where the credential lives; nothing needs restructuring to get here.
 
 ### Sequencing note
 
-Phases 1–4 need nothing from the TLCMap application to *work*. The platform items in §8.1
-make Phase 1 substantially better and are in-house, so they should be scheduled with it
-rather than deferred; §8.4 blocks only Phase 5. **The capability work can start immediately
-and run in parallel with the platform work.**
+**Every phase has platform prerequisites, and they gate it** (§8.6). The skills are written
+against the API as it will be, so a phase completes when its API changes are deployed to
+tlcmap.org — there is no version of this plan where the capability ships ahead of the
+platform and catches up later.
+
+Design and construction of both can start immediately and proceed in parallel: the API
+changes are small, mostly independent of each other, and none requires the skills to exist
+first. What cannot happen in parallel is *finishing* — a skill is not done until its
+prerequisite is live.
+
+The practical consequence for planning: **§8.1 Tier 1 is the long pole for the whole
+project.** Four changes, all modest, and Phase 1 waits on them.
 
 ---
 
@@ -1140,8 +1130,9 @@ Three are settled — see **Decisions taken** at the top. What remains:
    choosing before Phase 1 starts, because it shapes what the skills are tuned against.
 2. **Write API timeline.** Is §8.4 on TLCMap's roadmap? It sets Phase 5, and it is the only
    thing standing between use case 7 and a working managed layer.
-3. **Platform track ownership.** §8.1 is now in-house work. Who does it, and does the extent
-   facet land in time for Phase 1 to depend on it rather than ship the harvest workaround?
+3. **Platform track scheduling.** §8 is in-house work on the critical path (§8.6). Who picks
+   it up, and when does Tier 1 land? Phase 1 ships behind it, so this is the question that
+   sets the whole timeline.
 4. **NER stack** — spaCy, stanza, or model-based extraction for the geoparsing skill? The
    heaviest dependency question in the project. PEP 723 per-script environments (§4.2) keep
    it off everyone who is not geoparsing, but a multi-hundred-megabyte model download is
