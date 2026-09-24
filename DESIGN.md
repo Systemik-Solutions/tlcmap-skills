@@ -520,14 +520,50 @@ do: large or private corpora, non-standard formats, custom entity types, OCR tha
 repair, and control over the disambiguation. The skill says so, and offers the upload route
 first when it fits.
 
-**Flow.** Ingest and normalise (PDF/OCR/Trove XML) → sentence segmentation → NER (spaCy or
-stanza; a model pass for degraded OCR where a statistical tagger fails) → a mention table
-with context windows → hand off to `tlcmap-resolve` → re-attach character offsets and
-mention frequency.
+**Extraction is done by the model, not by an NER library.** Statistical taggers — spaCy,
+stanza — are trained on modern news and web text, which is the opposite of this corpus.
+Colonial diaries, OCR'd newspapers, archaic spelling and erratic capitalisation are where
+they degrade worst, and they cannot use context to tell the Hunter the river from Hunter the
+surname, or to read `Syduey` as an OCR'd Sydney. They also cannot take a custom entity type
+— pastoral runs, station names, ships — without retraining. The model does all of that
+without a dependency, which also removes the largest install footprint in the project.
+
+**Flow.**
+
+1. **Ingest and normalise** (PDF/OCR/Trove XML), then **chunk** into overlapping windows with
+   stable byte offsets. Deterministic, in code.
+2. **Extract** per chunk. The model returns, for each mention, the **verbatim surface form**
+   and the sentence containing it — explicitly *not* a character offset.
+3. **Anchor** in code, by exact string search within the chunk's own span. This is the step
+   that makes the approach safe, and it does two jobs at once:
+   - it produces **exact offsets** deterministically, which the model cannot be trusted to
+     report; and
+   - it is a **hard hallucination guard** — a surface form that does not appear verbatim in
+     the source is dropped and counted. A fabricated placename cannot survive it.
+
+   The drop count is reported, because a rising one means the extraction prompt is drifting.
+4. **Deduplicate** by surface form, keeping every offset, and carry the mention count.
+5. **Resolve** through `tlcmap-resolve` (§5.2), which is unchanged — it receives a mention
+   table exactly as it would from a spreadsheet.
+
+**Scale.** Corpus size selects the tier, and the skill says which it used:
+
+| Corpus | Approach |
+| --- | --- |
+| Up to ~100k words | Single pass with a capable model |
+| Larger | A cheap model extracts; the capable model is spent only on ambiguous resolution (§5.2 step 3) |
+
+**Reproducibility.** Extraction is not bit-reproducible the way a pinned tagger would be, and
+the design does not pretend otherwise. What it offers instead is something arguably better
+for a research claim: **every mention is verifiable against the source text**, because
+anchoring proves the surface form is really there at that offset. The provenance record
+carries the model and version used, the prompt, and the full extraction log — so a reviewer
+can check the output exactly, and re-run it approximately.
 
 **Outputs.** GeoJSON with per-place mention counts and source passages; per-decade layers; a
 `textcontexts`-shaped sidecar so the result can be fed to the TLCMap **Full Text view**; a
-mention-level CSV; and a layer file ready for upload via `tlcmap-prepare`.
+mention-level CSV; an extraction audit log including everything dropped at anchoring; and a
+layer file ready for upload via `tlcmap-prepare`.
 
 **Covers use case** 1.
 
@@ -985,8 +1021,8 @@ will be given a temporary implementation in the meantime.
 
 ### Phase 0 — Agree the design *(this document)*
 
-Remaining: the demonstration dataset, the NER stack, and whether §8.4's write API is on the
-TLCMap roadmap. See §12.
+Remaining: the demonstration dataset, who picks up the platform track, and whether §8.4's
+write API is on the TLCMap roadmap. See §12.
 
 ### Phase 1 — Core toolkit and the retrieval-to-visualisation path
 
@@ -1077,6 +1113,13 @@ A proof of concept that cannot be measured is a demonstration, not a proof.
   real historical sources, with precision, recall and — most importantly — the *abstention
   rate*, because a resolver that says "unknown" correctly is worth more than one that
   guesses well.
+- **Extraction accuracy** (§5.3). A hand-annotated passage set from real colonial-era and
+  OCR'd sources, scored for precision and recall against model extraction. This matters more
+  now that extraction is model-based rather than a pinned tagger: the argument for dropping
+  spaCy is that the model does better on exactly this material, and that claim should be
+  measured rather than asserted. Track the **anchor drop rate** alongside it — surface forms
+  the model returned that were not found verbatim in the source — since a rising drop rate is
+  the early warning that a prompt has drifted.
 - **Query correctness.** A fixture suite of natural-language requests with known-correct API
   queries, checking the model picks the right parameter and avoids the traps.
 - **Skill triggering.** Eval suites (via `skill-creator`) confirming each skill activates on
@@ -1133,10 +1176,10 @@ Three are settled — see **Decisions taken** at the top. What remains:
 3. **Platform track scheduling.** §8 is in-house work on the critical path (§8.6). Who picks
    it up, and when does Tier 1 land? Phase 1 ships behind it, so this is the question that
    sets the whole timeline.
-4. **NER stack** — spaCy, stanza, or model-based extraction for the geoparsing skill? The
-   heaviest dependency question in the project. PEP 723 per-script environments (§4.2) keep
-   it off everyone who is not geoparsing, but a multi-hundred-megabyte model download is
-   still a real cost to the one skill that needs it.
+4. *(Settled — model-based extraction, no NER library. See §5.3.)* The remaining question is
+   narrower: **what does extraction cost on a realistic corpus?** Worth measuring on a real
+   Trove export early in Phase 4, because it sets the tiering threshold in §5.3 and it is the
+   one place in the design with a per-token cost that scales with the researcher's data.
 5. **MCP hosting.** Where does the Phase 3 server run, and does it sit behind the same
    infrastructure as the application? Relevant because §2.3 notes the API has no rate
    limiting, and a public MCP endpoint makes that more pressing.
