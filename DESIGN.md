@@ -318,45 +318,108 @@ and the classic failure mode is specific: tool surfaces designed without workflo
 mirror the data model rather than the task. §9 is the answer: one vertical slice through all
 three layers, first.
 
-### 4.3 Packaging
+### 4.3 Packaging and distribution
 
 Three artefacts, in two places.
 
 **The API and the MCP server** live in the TLCMap application. Same stack, same deployment, same
 database, and at the write phase the same authentication and permission model.
 
-**The skills** are a plugin in this repository — the ordinary skills-with-scripts pattern, which
-Claude Code, Codex and other skill-running clients already support:
+**The skills** live in this repository, built to the **Agent Skills open standard**
+([agentskills.io](https://agentskills.io)) — a skill is a folder containing `SKILL.md` with
+`name` and `description` frontmatter, optionally bundling `scripts/`, `references/` and
+`assets/`. Around forty-five clients read that format, including Claude Code, Codex, Gemini CLI,
+Cursor, GitHub Copilot and VS Code, Goose, Kiro and OpenCode — and Laravel Boost, a useful
+precedent for a Laravel project publishing skills.
+
+**Target clients for verification: Claude Code, Codex and Gemini CLI.** Reading the format and
+running a skill correctly are different claims — script execution and working-directory handling
+vary — so portability is something we test on three, not something we assert for forty-five.
+
+#### Distribution: `gh skill`, not something we build
+
+There is no open standard for *plugins*: the specification covers one skill folder, and bundling
+several with hooks and commands is a single vendor's concept. Rather than invent packaging, use
+the tooling the ecosystem has converged on.
+
+**`gh skill`** (GitHub CLI v2.90.0+) discovers, installs, manages and publishes skills straight
+from a GitHub repository — `search`, `install`, `list`, `preview`, `update --all`, and
+`publish --dry-run` to validate before release. It covers all three target clients, routes each
+install to the right per-client directory, and carries supply-chain provenance.
+
+That settles the distribution question entirely:
+
+| Concern | Answer |
+| --- | --- |
+| How does a researcher install these? | `gh skill install` |
+| How do we publish? | Push to the repository; `gh skill publish` |
+| Per-client install directories | Handled by the tooling, not by us |
+| Do we need a plugin manifest? | **No.** `gh skill` serves Claude Code as well as the others |
+| Do we need per-vendor builds? | **No.** The same `SKILL.md` runs everywhere; only the install path differs |
+
+`gh skill` is in public preview, so confirm it is still the right bet before Phase D. The fallback
+is unexciting rather than alarming — a repository of standard skill folders can be copied into any
+client's skills directory by hand.
+
+**Validation in CI.** Adopt an existing linter rather than writing one; `skill-lint`, `skillmd`
+and `agent-skills-lint` all validate `SKILL.md` against the spec, and the last checks per-client
+schemas. Treat the choice as replaceable and do not build CI around one tool's output format.
+
+#### Repository layout
+
+Skills are self-contained, which is what the standard requires and what makes a folder work when
+copied into any client:
 
 ```
 tlcmap-skills/
-├─ .claude-plugin/plugin.json
-├─ skills/
-│  ├─ tlcmap-search/SKILL.md
-│  ├─ tlcmap-resolve/SKILL.md
-│  ├─ tlcmap-geoparse/SKILL.md
-│  ├─ tlcmap-analyse/SKILL.md
-│  ├─ tlcmap-visualise/SKILL.md
-│  ├─ tlcmap-prepare/SKILL.md
-│  └─ tlcmap-cite/SKILL.md
+├─ skills/                  # the deliverable — standard-compliant, self-contained
+│  ├─ tlcmap-search/
+│  │  ├─ SKILL.md           # name + description frontmatter; portable core only
+│  │  ├─ scripts/           # entry points, PEP 723 inline dependencies
+│  │  └─ references/        # cheatsheets this skill loads on demand
+│  ├─ tlcmap-resolve/
+│  ├─ tlcmap-geoparse/
+│  ├─ tlcmap-analyse/
+│  ├─ tlcmap-visualise/
+│  ├─ tlcmap-prepare/
+│  └─ tlcmap-cite/
 │
-├─ lib/tlcmap/          # local-only helpers (§7.1), imported by the scripts below
-├─ scripts/             # thin CLI entry points, PEP 723 inline dependencies
-├─ tests/               # unit tests + the production compatibility check
-├─ reference/           # cheatsheets the skills load on demand
-├─ evals/               # gold sets, fixtures, ground-truth artefacts (§11)
-└─ examples/            # the worked demonstrations
+├─ tests/                   # unit tests + the production compatibility check
+├─ evals/                   # gold sets, fixtures, ground-truth artefacts (§11)
+└─ examples/                # the worked demonstrations
 ```
+
+**Keep `SKILL.md` to the portable core.** `name` and `description` are the fields every client
+reads. Client-specific frontmatter — tool allowlists, model hints — is what makes a skill stop
+being portable, so it stays out.
+
+**Shared code is a deferred decision, measured rather than assumed.** A portable skill cannot
+reach a library at the repository root, because that root does not exist once the folder is
+copied elsewhere; sharing would mean vendoring one source copy into each skill at build time, and
+no existing tool does that. But the MCP server absorbs the HTTP client, query building,
+normalisation and catalogue caching, and most of what remains is skill-specific — chunking and
+anchoring belong only to `tlcmap-geoparse`, exports only to `tlcmap-visualise`, validation only to
+`tlcmap-prepare`. The plausibly shared surface is provenance manifests and coordinate
+verification.
+
+So: **start with no build step.** After A1 we will know what two real skills actually share. If it
+is a couple of hundred lines, add `src/` and a short vendoring script; if it is negligible,
+self-contained skills stay simpler and more standard-compliant. Deciding now would be guessing.
 
 **Dependencies without an install step.** Each script declares its own dependencies with PEP 723
 inline metadata, so `uv run scripts/analyse.py` resolves them per-script into an ephemeral
 environment. The heavier skills want `pandas`, `shapely` and `matplotlib`; nobody should install
-that stack to run a search.
+that stack to run a search. It is a plain shell invocation, so it travels as well as the skill
+format does.
+
+**MCP carries the reach; skills are portability on top.** MCP is the mature standard in this
+stack, and a client with no skills support still gets full tool access through the server. That is
+the other reason Layer 2 comes before Layer 3 (§4.2): its portability is not in question.
 
 **Versioning against an unversioned API.** The API is not versioned (§2.4) and the upper layers
-depend on documented behaviours, so `tests/` includes a compatibility check run against
-production that fails loudly when one of them changes. When the `udateend` bug is fixed, we find
-out from a red test rather than from a wrong timeline.
+depend on documented behaviours, so `tests/` includes a compatibility check run against production
+that fails loudly when one of them changes. When the `udateend` bug is fixed, we find out from a
+red test rather than from a wrong timeline.
 
 ---
 
@@ -742,7 +805,7 @@ workflow has exercised the six specified ones.
 Instructions plus **tool calls**, with Python only where the work is genuinely local. A skill's
 job is deciding what to ask, judging what comes back, and producing the output.
 
-What stays in `lib/tlcmap/`:
+What stays local, in each skill's own `scripts/` (§4.3):
 
 | Local | Why |
 | --- | --- |
@@ -1210,8 +1273,11 @@ review bucket and the human gates are the product, not friction in it.
    Recommend requiring it.
 7. **How many skills, once the tools exist?** §7.3 flags `tlcmap-search` as provisional, because it
    largely fails the §7.2 test once the tool layer carries what it used to know. Current expectation
-   is six, with search folded into shared reference material. Phase A settles it, and the plugin
-   manifest stays unsettled until it does.
+   is six, with search folded into reference material the others carry. Phase A settles it, and the
+   shipped skill set stays unsettled until it does.
+10. **Does shared skill code justify a build step?** Answerable only after A1, when two real
+   skills exist and the duplication can be measured rather than guessed (§4.3). Until then, no
+   build step.
 8. **Write API timeline** — sets Phase E, and it is the only thing standing between use case 7 and a
    working managed layer.
 9. **Licensing and governance** of the three artefacts, which third parties will install. What
