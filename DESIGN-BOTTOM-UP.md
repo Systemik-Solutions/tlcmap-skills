@@ -158,11 +158,12 @@ Three things make it the right slice:
    that is hardest to retrofit and most costly to get wrong.
 
 The discipline that keeps it a slice rather than a phase is **narrow scope within the use
-case**:
+case**. Note that the left column is what Phase A *verifies*, not what the skill *supports* —
+the workflow takes a region as a parameter and nothing in it is Hunter-Valley-specific:
 
-| In the slice | Explicitly out |
+| Verified in the slice | Explicitly out |
 | --- | --- |
-| **One region**, end to end | Arbitrary regions at arbitrary scale |
+| **One region**, end to end | Dense regions that exceed the ceiling, and multi-region composition (§3.5) |
 | Discovery → retrieval → rights → dedupe → brief → field files | Resolution, geoparsing, upload, write |
 | 6 MCP tools | The remaining six |
 | API ① ② ④ ⑦ ⑫ — five items | The other thirteen |
@@ -263,8 +264,25 @@ Stated plainly, because this choice leaves a larger gap than a resolver-driven s
   NER libraries ([DESIGN.md §5.3](./DESIGN.md#53-tlcmap-geoparse--map-the-places-mentioned-in-a-document)).
 - **It does not validate the tool surface for the resolver-driven use cases.** Six tools
   exercised, six inferred.
-- **It does not prove scale.** One region, comfortably under the ceiling. A dense region —
-  Sydney, Melbourne — is a different problem, and is Phase B's.
+- **It does not prove scale**, which is a larger gap than it looks, because *the skill applies
+  to any region from the moment it exists* — the constraint is on what Phase A measures, not on
+  what the workflow accepts. What a dense or very large region additionally needs:
+
+  - **Paging, not chunking.** A region exceeding the 5,000-record ceiling is §8.1 ③'s problem,
+    not the skill's. Recursive bbox subdivision in the client is exactly the workaround
+    [DESIGN.md §3.8](./DESIGN.md#38-fix-it-upstream) forbids and §6.2 records as deliberately
+    not built. ③ lands in Phase B and is what actually unlocks arbitrary regions.
+  - **Composition that is not concatenation.** Records near a boundary appear in more than one
+    request, so deduplication runs over the union. Attribution is unioned, not repeated — 36
+    layers across four sub-queries is 36 entries. And **the statistics do not compose**:
+    density over a union is not the mean of densities, the convex hull of a union is not the
+    union of hulls, and a point's nearest neighbour may lie outside its own sub-query. Since
+    deduplication changes the counts too, statistics are recomputed over the combined set or
+    they are wrong.
+  - **A deliverable that changes shape.** 273 records make a brief someone reads in the field;
+    50,000 across 400 layers make one nobody does. Past some size the right output becomes an
+    index, a prioritisation or a filtered selection rather than a longer document — a design
+    question for Phase B, not a scaling one.
 - **It does not make the harvest a product.** The exhaustive extent harvest exists once, in
   `evals/`, to generate ground truth. It is not shipped, not run by users and not a fallback
   path — that would reintroduce exactly what [DESIGN.md §3.8](./DESIGN.md#38-fix-it-upstream)
@@ -766,10 +784,18 @@ into the field files.
 - *All pass* — proceed to Phase B with the largest API change and the rights machinery both
   validated against a real workflow.
 
-### Phase B — API programme
+### Phase B — API programme, and scale
 
-§4.2's items: ① ③ ④ ⑤ ⑥ ⑦ ⑫, then the non-blocking remainder. Valuable independently of
-everything above them.
+§4.2's items: **③** (`/api` over contributed layers), **⑤** (namespaced extended data),
+**⑥** (`udateend`), then the resolver's **⑨ ⑩ ⑪** ahead of Phase D, then the non-blocking
+remainder. All valuable independently of everything above them.
+
+③ is the one that changes what the Phase A skill can do rather than how cleanly it does it:
+it removes the 5,000-record ceiling as a design concern and so **unlocks arbitrary regions**
+without the client ever subdividing a bounding box (§3.5). Phase B therefore also carries the
+composition work that dense regions need — deduplication over the union, unioned attribution,
+statistics recomputed rather than combined — and the question of what the deliverable becomes
+when a region returns tens of thousands of records rather than 273.
 
 ### Phase C — full read-only MCP server
 
@@ -874,10 +900,12 @@ rule — the slice's four first — is the guard.
    pressing.
 4. **Is the tool surface right at twelve?** Fewer and richer, or more and finer? Phase A gives
    evidence for six of them; the instinct to resist is one tool per endpoint.
-5. **Is the Hunter Valley the right region?** It is dense enough to be interesting and small
-   enough to stay under the ceiling. A second region with different characteristics — sparse,
-   or remote, or carrying more restricted layers — would test generalisation cheaply once A1
-   works.
+5. **Which second region tests generalisation?** The skill is region-parameterised from the
+   start, so this is about what to *verify*, not what to support. The Hunter Valley is dense
+   enough to be interesting and small enough to stay under the ceiling; a sparse or remote
+   region, and one carrying more restricted layers, would each probe a different edge cheaply
+   once A1 works. A region that *exceeds* the ceiling is Phase B's, not A's, because the honest
+   answer there is §8.1 ③ rather than client-side chunking.
 6. **Do the skills require the MCP server, or degrade without it?** Requiring it is simpler and
    honest; degrading gracefully costs the HTTP client this plan was designed to avoid building.
    Recommend requiring it.
