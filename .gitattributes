@@ -1,0 +1,5 @@
+# Normalise all text files to LF in the working tree and the repository.
+* text=auto eol=lf
+
+# Build products / binaries
+*.docx binary
