@@ -110,14 +110,30 @@ The answer is §3: build one thin vertical slice through all three layers first.
 | **Owns** | Data, query semantics, correctness | Tool surface, agent ergonomics | Workflow, judgement, output |
 | **Makes model calls** | No | **No** | Yes |
 | **Knows about agents** | No | Tool shapes only | Entirely |
-| **Reversible?** | Hard — public contract | **Hardest — clients depend on it** | Easy — rewrite freely |
+| **Structurally reversible?** | **Hardest — unknown clients, no negotiation** | Easy — tools are re-read each session | Easy — rewrite freely |
+| **Semantically reversible?** | Hard | **Hardest — changes are invisible** | Easy |
 | **Built in** | PHP / Laravel | PHP / Laravel | Markdown + Python |
 
-The reversibility row is the one to act on. The MCP tool surface is the least reversible thing
-in the programme — once Claude Desktop users and a site chatbot depend on `tlcmap_search`'s
-shape, changing it breaks them, while skills can be rewritten at will because nothing depends
-on their internals. **Effort should be allocated inversely to volume here:** the server is the
-smallest layer and deserves the most design scrutiny per line.
+The two reversibility rows say different things, and conflating them leads to the wrong
+conclusion.
+
+**Structurally, the API is the hardest to change.** It has real clients today — scripts, QGIS
+users, embeds — none of which re-read anything or adapt. MCP is the opposite: the protocol is
+self-describing and the tool list is fetched per session, so a renamed tool or a new parameter
+is visible, and a capable agent adapts without anyone shipping a fix. Skills are trivially
+rewritable.
+
+**Semantically, MCP is the hardest**, and this is the row to act on. An agent remediates
+*errors*; it does not remediate *meanings that changed quietly*. If `date_from` begins
+excluding undated records where it used to include them, or `bbox` starts matching declared
+extents rather than computed ones, nothing fails — the tool returns a well-formed, plausible,
+wrong answer, and the agent has no way to notice. That is precisely the failure class
+[DESIGN.md §2.3](./DESIGN.md#23-behaviours-that-will-break-a-naive-client) exists to eliminate,
+reintroduced one layer up.
+
+So the server still deserves the most design scrutiny per line — it is the smallest layer and
+the one whose mistakes are quietest — but the discipline it needs is about **meaning**, not
+about freezing names (§5.5).
 
 ---
 
@@ -280,7 +296,7 @@ now ordered by **what the slice needs, then what the tool surface needs, then th
 | Item | Milestone | Why the slice needs it |
 | --- | --- | --- |
 | **① Computed catalogue facet** | A1 | Regional layer discovery in one request. **The slice exists to prove this one**, and it is the largest single item in the programme. |
-| **② Honest errors** | A1 | The server maps status codes to tool errors. Without it every tool sniffs content types — and the sniffing would live in PHP, permanently, in the layer hardest to change. |
+| **② Honest errors** | A1 | The server maps status codes to tool errors. Without it every tool sniffs content types, and that guesswork ends up baked into the layer whose mistakes are quietest. |
 | **④ Cheap count** | A1 | A regional query must know how big it is before committing to the fetch. Today `paging=1` on an oversized query still fails. |
 | **⑦ `nulls=last` / `include_undated`** | A1 | A brief for "the Hunter Valley, 1820–1860" silently loses every undated record otherwise — and most gazetteer records are undated. The trap this slice is most likely to hit. |
 | **⑫ Statistics as JSON** | A2 | Characterising what is in the region. The numbers exist today only inside an HTML page. |
@@ -527,15 +543,32 @@ specific state of the data.
 
 ### 5.5 Tool surface stability
 
-The least reversible thing in the programme (§2), so it is governed explicitly:
+The surface is cheap to change structurally and expensive to change semantically (§2), so the
+rules govern meaning rather than shape.
 
-- **Additive changes only** after first publication: new tools, new optional parameters, new
-  output fields. Removing a field or changing its meaning is breaking.
-- **Version the surface, not the API.** The TLCMap API stays unversioned (DESIGN.md §2.4); the
-  MCP server declares a version and can keep a deprecated tool alive through a transition.
-- **The slice is the design review.** Tools 6–12 are not published until one real workflow has
-  exercised tools 1–5, because that is the only evidence that will exist about whether the
-  shapes are right.
+**Rename rather than redefine.** The central rule, and the one that follows directly from how
+agents behave. A renamed or removed tool fails loudly, the agent re-reads the tool list and
+adapts, and nothing silently wrong reaches a researcher. A tool that keeps its name while its
+parameters change meaning succeeds quietly and corrupts the output. So when the semantics of
+`bbox`, `date_from`, `include_undated` or a returned field genuinely have to change, **ship a
+new name and deprecate the old one** — never redefine in place, however tempting the
+continuity looks.
+
+**Additive changes are free; semantic changes are not.** New tools, new optional parameters and
+new output fields cost nothing, because an agent that has not heard of them simply does not use
+them. Removing a field or changing what one means is the expensive direction.
+
+**Version the surface, not the API.** The TLCMap API stays unversioned (DESIGN.md §2.4); the
+MCP server declares a version and can keep a deprecated tool alive through a transition.
+
+**Remember what does not re-read.** The self-describing argument covers agents in a session. It
+does not cover the artefacts built around the tools: SKILL.md files naming tools, a site
+chatbot's fixed prompt, eval fixtures, and provenance records citing a tool whose behaviour has
+since moved. Those need the deprecation window that agents do not.
+
+**The slice is the design review.** Tools 7–12 are not published until one real workflow has
+exercised the six in the slice, because that is the only evidence that will exist about whether
+the shapes are right.
 
 ### 5.6 What the server must not do
 
@@ -864,9 +897,10 @@ Adopt it. The dependency ordering is right, it avoids building an HTTP client th
 phase makes redundant, and both lower layers have value independent of the layer above them.
 
 The amendment that matters is Phase A. Strict three-layer sequencing would design an API and a
-tool surface against workflows nobody has built — and the tool surface is the least reversible
-thing here. One thin slice through all three layers, on a real region with rights messy enough
-to be honest, buys the evidence before the commitment.
+tool surface against workflows nobody has built — and while a tool surface is cheap to reshape,
+its *semantics* are not, because a meaning that changes quietly reaches a researcher as a wrong
+answer rather than as an error (§5.5). One thin slice through all three layers, on a real region
+with rights messy enough to be honest, buys the evidence before the commitment.
 
 The trade it makes is explicit: it proves discovery, retrieval and the rights machinery, and
 proves nothing about resolution. Phase D inherits that debt and should be resourced as a second
