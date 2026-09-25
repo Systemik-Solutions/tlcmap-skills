@@ -1275,10 +1275,10 @@ review bucket and the human gates are the product, not friction in it.
    largely fails the §7.2 test once the tool layer carries what it used to know. Current expectation
    is six, with search folded into reference material the others carry. Phase A settles it, and the
    shipped skill set stays unsettled until it does.
-10. **Does shared skill code justify a build step?** Answerable only after A1, when two real
-   skills exist and the duplication can be measured rather than guessed (§4.3). Until then, no
-   build step.
 8. **Write API timeline** — sets Phase E, and it is the only thing standing between use case 7 and a
    working managed layer.
 9. **Licensing and governance** of the three artefacts, which third parties will install. What
    licence, and what support expectation?
+10. **Does shared skill code justify a build step?** Answerable only after A1, when two real
+   skills exist and the duplication can be measured rather than guessed (§4.3). Until then, no
+   build step.
