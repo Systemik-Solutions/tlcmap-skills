@@ -1,10 +1,10 @@
 # TLCMap AI Skills — use cases
 
-**Companion to [DESIGN.md](./DESIGN.md)** · **Date:** 2026-09-24 · **Status:** draft for discussion
+**Companion to [DESIGN.md](./DESIGN.md)** · **Date:** 2026-09-25 · **Status:** companion to the design
 
 This document describes each use case in full: who it is for, what the pipeline actually
 does, which parts the skills cover, **which parts they do not**, and what has to exist before
-it works. §7 of the design document holds the summary table; this is the detail behind it.
+it works. §8 of the design document holds the summary table; this is the detail behind it.
 
 Every example is drawn from real TLCMap data, checked against production on 2026-09-24. Layer
 IDs resolve at `https://tlcmap.org/layers/{id}`.
@@ -12,12 +12,12 @@ IDs resolve at `https://tlcmap.org/layers/{id}`.
 **Each use case opens with example prompts** — what a researcher would actually type, the
 skills that should fire, and the phrasings where the skill is expected to *push back* rather
 than comply. Those are not decoration: they become the trigger-accuracy fixtures in `evals/`
-([DESIGN.md §10](./DESIGN.md#10-how-we-will-know-it-works)). A skill that activates on
+([DESIGN.md §11](./DESIGN.md#11-measurement)). A skill that activates on
 someone else's prompt is as much a defect as one that fails to activate on its own, and the
 push-back prompts are how the determinism and ethics boundaries get tested rather than merely
 asserted.
 
-**The skills**, in brief — full definitions in [DESIGN.md §5](./DESIGN.md#5-the-skill-set):
+**The skills**, in brief — full definitions in [DESIGN.md §7.3](./DESIGN.md#73-the-skills):
 
 | | |
 | --- | --- |
@@ -35,7 +35,7 @@ Two rules run through all eight, and are worth holding in mind while reading:
 > distance is ever produced by the model. ([DESIGN.md §3.1](./DESIGN.md#31-the-determinism-boundary))
 
 > **Attribution travels; permission is never guessed.** Licence and rights text is surfaced
-> verbatim, never parsed into a yes or no. ([DESIGN.md §3.3](./DESIGN.md#33-attribution-travels-permission-does-not-get-guessed))
+> verbatim, never parsed into a yes or no. ([DESIGN.md §3.3](./DESIGN.md#33-attribution-travels-permission-is-never-guessed))
 
 ---
 
@@ -43,14 +43,14 @@ Two rules run through all eight, and are worth holding in mind while reading:
 
 | # | Use case | Status |
 | --- | --- | --- |
-| [1](#1-historical-text--mapped-corpus) | Historical text → mapped corpus | Deliverable, Phase 4 |
-| [2](#2-place-based-corpus-enrichment) | Place-based corpus enrichment | Deliverable, Phase 2 |
-| [3](#3-regional-knowledge-synthesis-for-fieldwork) | Regional knowledge synthesis for fieldwork | Deliverable, Phase 1 |
+| [1](#1-historical-text--mapped-corpus) | Historical text → mapped corpus | Phase D |
+| [2](#2-place-based-corpus-enrichment) | Place-based corpus enrichment | Phase D |
+| [3](#3-regional-knowledge-synthesis-for-fieldwork) | Regional knowledge synthesis for fieldwork | **Phase A — the vertical slice** |
 | [4](#4-indigenous--colonial-name-co-mapping) | Indigenous / colonial name co-mapping | Human-gated by design |
-| [5](#5-toponym-pattern-analysis) | Toponym pattern analysis | Deliverable, Phase 1 |
-| [6](#6-environmental--event-history-overlay) | Environmental / event history overlay | Deliverable, Phase 4 |
-| [7](#7-comparative--longitudinal-mapping-of-a-single-concept) | Longitudinal mapping of a single concept | Blocked on the write API |
-| [8](#8-teaching--public-facing-storymaps) | Teaching / public-facing storymaps | Deliverable, Phase 1 |
+| [5](#5-toponym-pattern-analysis) | Toponym pattern analysis | Phase B |
+| [6](#6-environmental--event-history-overlay) | Environmental / event history overlay | Phase B or D |
+| [7](#7-comparative--longitudinal-mapping-of-a-single-concept) | Longitudinal mapping of a single concept | Phase E — blocked on the write API |
+| [8](#8-teaching--public-facing-storymaps) | Teaching / public-facing storymaps | Phase B |
 | [+](#additional-capabilities) | Additional capabilities not in the original brief | — |
 
 ---
@@ -143,7 +143,7 @@ the thing that fixes it, and sentence context is what an LLM brings.**
   they do not run an OCR engine over page images.
 - **Decide what counts as a mention.** Whether "the colony" or "the diggings" is a place is a
   research judgement; the skill asks rather than assuming.
-- **Upload the result.** Until the write API (Phase 5) the researcher uploads the prepared
+- **Upload the result.** Until the write API (Phase E) the researcher uploads the prepared
   file through the browser.
 - **Replace TLCMap's own geoparser for simple cases.** For a single moderate document,
   uploading the text to TLCMap is better — it produces a proper text layer and the Full Text
@@ -151,8 +151,8 @@ the thing that fixes it, and sentence context is what an LLM brings.**
 
 ### Prerequisites and status
 
-Needs §8.1 ②③, §8.2 ⑨ (match score), §8.3 ⑩⑪ (bulk ID fetch, vocabularies).
-**Phase 4**, because it depends on the Phase 2 resolver.
+Needs §5.1 ②③, §5.2 ⑨ (match score), §5.3 ⑩⑪ (bulk ID fetch, vocabularies).
+**Phase D**, with the resolver.
 
 ---
 
@@ -240,10 +240,10 @@ makes the match decidable.
 
 ### Prerequisites and status
 
-Needs §8.2 ⑨ (match score — the one signal that cannot be obtained any other way),
-§8.3 ⑩ (bulk fetch by ID, or it is one request per candidate) and ⑪ (vocabularies, or a
+Needs §5.2 ⑨ (match score — the one signal that cannot be obtained any other way),
+§5.3 ⑩ (bulk fetch by ID, or it is one request per candidate) and ⑪ (vocabularies, or a
 `state`/`lga` filter cannot be constructed at all).
-**Phase 2.** Fully supported by today's data; the gold set (§10) measures it.
+**Phase D.** Fully supported by today's data; the gold set (§11 of the design) measures it.
 
 ---
 
@@ -288,8 +288,8 @@ GET /places?format=json&bbox=150.8,-33.1,151.4,-32.6&searchpublicdatasets=on
 Thirty-six layers, from weather stations (461) to convict landscapes (1270), that a
 researcher had no way of knowing existed. **None of them could be found through the layer
 catalogue**, because only 4 of 2,118 public layers declare a bounding box
-([DESIGN.md §2.2](./DESIGN.md#22-measured-on-the-live-catalogue)). This use case is the
-clearest argument for §8.1 ①, the catalogue extent facet.
+([DESIGN.md §2.2](./DESIGN.md#22-the-catalogue-measured)). This use case is the
+clearest argument for §5.1 ①, the catalogue extent facet.
 
 The brief this produces groups those 273 records by type — water sources, stations, heritage
 sites, language boundaries — cites each by TLCMap UID, and carries each contributing layer's
@@ -299,7 +299,7 @@ licence and warning alongside its data.
 
 1. **Define the region** — from a placename, a bbox, or a polygon. Longitude first, ring
    closed; the skill handles the convention so the researcher does not have to.
-2. **Discover layers** (`tlcmap-search`) — one faceted catalogue request once §8.1 ① exists.
+2. **Discover layers** (`tlcmap-search`) — one faceted catalogue request once §5.1 ① exists.
 3. **Retrieve** — gazetteer records plus the contributed layers that intersect, cached and
    checksummed.
 4. **Deduplicate** (`tlcmap-analyse`) — the same waterhole in three layers is one feature with
@@ -327,8 +327,8 @@ licence and warning alongside its data.
 
 ### Prerequisites and status
 
-Needs §8.1 ① above all — without the extent facet, regional discovery does not work.
-**Phase 1.**
+Needs §5.1 ① above all — without the extent facet, regional discovery does not work.
+**Phase A: this is the vertical slice.**
 
 ---
 
@@ -385,7 +385,7 @@ Neither licence is machine-readable, and both say something a parser would get c
 wrong. A naive integration looking for a recognised identifier finds none and treats the layer
 as unrestricted. A slightly cleverer one might match "Closed" and guess. **Both are wrong, and
 the second is worse for being confident.** This is why
-[DESIGN.md §3.3](./DESIGN.md#33-attribution-travels-permission-does-not-get-guessed) forbids
+[DESIGN.md §3.3](./DESIGN.md#33-attribution-travels-permission-is-never-guessed) forbids
 parsing these fields into a permission decision at all.
 
 A third layer shows what good contributed data looks like here. **Layer 2477, "Southern
@@ -427,10 +427,10 @@ Queensland) and 2754 (Coorong, Adelaide and Yorke).
 
 ### Prerequisites and status
 
-Needs §8.3 ⑮ (a structured licence identifier alongside the free text) to *assist* — never to
+Needs §5.3 ⑮ (a structured licence identifier alongside the free text) to *assist* — never to
 decide. **Human-gated by design at every phase.** CARE principles are stated in the skills'
 own instructions, not only in this document
-([DESIGN.md §11](./DESIGN.md#11-risks-and-ethics)).
+([DESIGN.md §12](./DESIGN.md#12-risks-and-ethics)).
 
 ---
 
@@ -479,7 +479,7 @@ GET /api?format=json&containsname=creek&per_page=100&page=1
 ```
 
 Ninety-four thousand records for one word. That is well past the 5,000-record ceiling on
-`/places`, which is why this use case harvests through `/api` — and why §8.1 ③, extending
+`/places`, which is why this use case harvests through `/api` — and why §5.1 ③, extending
 `/api` to contributed layers, matters if the analysis is to include them.
 
 The classification step is where the model earns its place: given a sample of names, it
@@ -519,8 +519,8 @@ labels itself at scale — the code does, reproducibly, and the boundary cases g
 
 ### Prerequisites and status
 
-Works today for gazetteer-only analysis. Needs §8.1 ③ to include contributed layers.
-**Phase 1.**
+Works today for gazetteer-only analysis. Needs §5.1 ③ to include contributed layers.
+**Phase B.**
 
 ---
 
@@ -605,8 +605,8 @@ rather than through a search.
 
 ### Prerequisites and status
 
-Needs §8.2 ⑥ (`udateend`) and ⑦ (`include_undated`) for honest temporal work.
-**Phase 4** where text extraction is involved; **Phase 1** where an existing layer is used.
+Needs §5.2 ⑥ (`udateend`) and ⑦ (`include_undated`) for honest temporal work.
+**Phase D** where text extraction is involved; **Phase B** where an existing layer is used.
 
 ---
 
@@ -694,8 +694,8 @@ a sustained research programme publishing as it goes, with a shared field vocabu
 
 ### Prerequisites and status
 
-**Blocked on [§8.4, the write API](./DESIGN.md#84-tier-4--the-write-api)**, plus §8.3 ⑭
-(conditional requests and `updated_since`). **Phase 5.**
+**Blocked on [§5.4, the write API](./DESIGN.md#54-the-write-api)**, plus §5.3 ⑭
+(conditional requests and `updated_since`). **Phase E.**
 
 ---
 
@@ -753,7 +753,7 @@ distinguishing who went where.
 TLCMap Views does the map for free. `latest/journey.html` needs `LineString` features, which
 a layer feed generates with `line=time`; `latest/timeline.html` needs `udatestart` and
 `udateend`, which layer feeds carry correctly — search feeds do not, because of the
-`udateend` bug (§8.2 ⑥).
+`udateend` bug (§5.2 ⑥).
 
 ### The pipeline
 
@@ -784,15 +784,15 @@ a layer feed generates with `line=time`; `latest/timeline.html` needs `udatestar
 
 ### Prerequisites and status
 
-Works with today's API. Improved by §8.2 ⑥ (`udateend`) so timelines can be built from
-searches as well as layers. **Phase 1.**
+Works with today's API. Improved by §5.2 ⑥ (`udateend`) so timelines can be built from
+searches as well as layers. **Phase B.**
 
 ---
 
 ## Additional capabilities
 
 Not in the original brief, but cheap, high-value, and directly useful to TLCMap's own
-community. See [DESIGN.md §7](./DESIGN.md#7-use-cases-mapped).
+community. See [DESIGN.md §8](./DESIGN.md#8-use-cases).
 
 ### Example prompts for these
 
