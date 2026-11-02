@@ -50,3 +50,7 @@ These are the ones most easily broken by accident. Full statements in
 - The documents cross-reference each other by section anchor. After editing a heading, check both
   files for links to it.
 - DESIGN.md carries no decision history — state the decision, not how it was reached.
+
+## Local setup
+
+For local development of related projects see [LOCAL-SETUP.md](LOCAL-SETUP.md). Project related instructions are also available in this file. Read this file every time you are going to work on a project outside of this repository.
