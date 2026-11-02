@@ -17,7 +17,7 @@ deliverable. Nothing in `skills/` exists yet.
 | --- | --- |
 | [documents/DESIGN.md](documents/DESIGN.md) | The whole design — platform assessment, principles, the three layers, the build plan, risks, open questions |
 | [documents/USE-CASES.md](documents/USE-CASES.md) | The eight research use cases in full, with example prompts and worked examples from real TLCMap data |
-| [documents/LARAVEL-UPGRADE.md](documents/LARAVEL-UPGRADE.md) | Upgrading the TLCMap application from Laravel 5.8 to 13 — the prerequisite for the MCP server, with a time estimate |
+| [documents/LARAVEL-UPGRADE.md](documents/LARAVEL-UPGRADE.md) | Upgrading the TLCMap application from Laravel 5.8 to 13, with a time estimate — deferred to a later phase; nothing here depends on it |
 
 Read DESIGN.md first. USE-CASES.md is the detail behind its §8.
 
@@ -27,13 +27,14 @@ Three layers, built bottom-up, because each one is the foundation for the next:
 
 ```
 Layer 3  SKILLS        workflow, judgement, ethics     Markdown + Python   this repository
-Layer 2  MCP SERVER    discrete tools, no judgement    PHP / Laravel       TLCMap application
+Layer 2  MCP SERVER    discrete tools, no judgement    TypeScript          its own repository and service
 Layer 1  API           the contract                    PHP / Laravel       TLCMap application
 ```
 
 Only Layer 3 lives here. The API enhancements ([DESIGN.md §5](documents/DESIGN.md#5-layer-1--the-api))
-and the MCP server ([§6](documents/DESIGN.md#6-layer-2--the-mcp-server)) are changes to the TLCMap
-application itself, and most of them are prerequisites for the skills — so the plan sequences them
+are changes to the TLCMap application itself. The MCP server
+([§6](documents/DESIGN.md#6-layer-2--the-mcp-server)) is a separate service that reaches TLCMap
+only through that API. Most of both are prerequisites for the skills — so the plan sequences them
 rather than working around them.
 
 Seven skills are planned ([§7.3](documents/DESIGN.md#73-the-skills)):
@@ -78,7 +79,7 @@ pandoc documents/LARAVEL-UPGRADE.md -o documents/LARAVEL-UPGRADE.docx
 
 ## Related repositories
 
-- [GHAP](https://github.com/HughCraig/GHAP) — the main TLCMap application (Laravel); Layers 1 and 2 are built here
+- [GHAP](https://github.com/HughCraig/GHAP) — the main TLCMap application (Laravel); Layer 1 is built here
 - [TLCMap Views](https://github.com/HughCraig/TLCMapViews) — the visualisation layer
 - [TLCMap documentation](https://guide.tlcmap.org/) — including the [developer API reference](https://guide.tlcmap.org/developers/)
 

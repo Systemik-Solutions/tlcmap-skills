@@ -4,7 +4,8 @@
 
 Companion documents: **[USE-CASES.md](./USE-CASES.md)** — the eight research use cases in full,
 with example prompts and worked examples from real TLCMap data; and
-**[LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)** — the platform upgrade that is Phase 0 of the plan.
+**[LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)** — the deferred upgrade of the TLCMap application,
+which this plan does not depend on.
 
 ---
 
@@ -21,7 +22,7 @@ with example prompts and worked examples from real TLCMap data; and
 | [7. Layer 3 — the skills](#7-layer-3--the-skills) | Workflow and judgement |
 | [8. Use cases](#8-use-cases) | Mapping to USE-CASES.md |
 | [9. The vertical slice](#9-the-vertical-slice) | The proof of concept |
-| [10. Plan](#10-plan) | Phase 0, then Phases A–E |
+| [10. Plan](#10-plan) | Phases A–E |
 | [11. Measurement](#11-measurement) | How we know it works |
 | [12. Risks and ethics](#12-risks-and-ethics) | |
 | [13. Open questions](#13-open-questions) | |
@@ -269,7 +270,8 @@ disambiguation and ethics do not become endpoints.
 │           Markdown + thin Python.  Orchestrates tools.      │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 2  MCP SERVER        discrete tools, no judgement    │
-│           PHP/Laravel, in-app.  Opens TLCMap to any agent.  │
+│           TypeScript, own service.  Opens TLCMap to any     │
+│           agent.  Speaks to TLCMap only through the API.    │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 1  API               the contract. One deployment.   │
 │           PHP/Laravel.  Fixes help every client.            │
@@ -283,7 +285,7 @@ disambiguation and ethics do not become endpoints.
 | **Knows about agents** | No | Tool shapes only | Entirely |
 | **Structurally reversible?** | **Hardest — unknown clients, no negotiation** | Easy — tools are re-read each session | Easy — rewrite freely |
 | **Semantically reversible?** | Hard | **Hardest — changes are invisible** | Easy |
-| **Built in** | PHP / Laravel | PHP / Laravel | Markdown + Python |
+| **Built in** | PHP / Laravel | TypeScript | Markdown + Python |
 
 The two reversibility rows say different things.
 
@@ -311,8 +313,10 @@ Building API → MCP → skills, rather than the reverse:
   later makes redundant. Built in this order, that layer is never written.
 - **Each layer stands alone.** If work stops after two layers, TLCMap still has a better API and
   an AI gateway serving every agent platform.
-- **It plays to the team in the right order.** The lower two layers are PHP and Laravel in a
-  codebase the team owns; the unfamiliar part comes last, on solid ground.
+- **It plays to the team in the right order.** The API is PHP and Laravel in a codebase the team
+  owns; the server is a thin TypeScript client of it, close to the JavaScript the team already
+  writes for the browser interface and TLCMap Views; the least familiar part comes last, on solid
+  ground.
 
 The risk this creates is designing an API and a tool surface for workflows nobody has built yet —
 and the classic failure mode is specific: tool surfaces designed without workflow experience
@@ -321,10 +325,12 @@ three layers, first.
 
 ### 4.3 Packaging and distribution
 
-Three artefacts, in two places.
+Three artefacts, in three places.
 
-**The API and the MCP server** live in the TLCMap application. Same stack, same deployment, same
-database, and at the write phase the same authentication and permission model.
+**The API** lives in the TLCMap application.
+
+**The MCP server** lives in its own repository and deploys as its own service. It is a client of
+the API, so it ships on its own schedule and never changes the application's runtime.
 
 **The skills** live in this repository, built to the **Agent Skills open standard**
 ([agentskills.io](https://agentskills.io)) — a skill is a folder containing `SKILL.md` with
@@ -583,48 +589,62 @@ absorb them:
 
 ### 6.1 Architecture
 
-**PHP and Laravel, inside the TLCMap application** — same stack, same deployment, same database,
-and at the write phase the same authentication and permission model.
+**A separate TypeScript service that speaks to TLCMap only through its public HTTP API.** It has
+no database connection and no access to the application's code.
 
-Built on **`laravel/mcp`**, Laravel's first-party MCP package, which requires Laravel 11 or later
-and PHP 8.2 or later. TLCMap runs Laravel 5.8 on PHP 7, so the server waits on the platform
-upgrade to Laravel 13 ([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)).
+Built on the official MCP TypeScript SDK (`@modelcontextprotocol/sdk`, v1.32.2 on npm at
+2026-11-02, MIT, Node 18 or later), which is the protocol's reference implementation. Tool inputs
+and outputs are declared once as typed schemas, and the JSON Schema each tool publishes is generated
+from them, so the tool surface is a contract the compiler checks rather than one kept by hand.
 
 ```
   Agent host (Claude Code / Desktop / site chatbot / other)
         │  MCP over HTTP
         ▼
   ┌──────────────────────────────┐
-  │  mcp.tlcmap.org              │   Laravel, in-app
+  │  mcp.tlcmap.org              │   TypeScript, Node, own service
   │   ├─ tool definitions        │   thin: validation + shape
   │   ├─ resource handles        │   bulk data by reference
   │   └─ provenance envelope     │
   └────────────┬─────────────────┘
-               │  internal query layer (not HTTP)
+               │  HTTPS — the public API (§5)
+               ▼
+  ┌──────────────────────────────┐
+  │  tlcmap.org                  │   Laravel application
+  └────────────┬─────────────────┘
                ▼
         TLCMap database / PostGIS
 ```
 
+Separate rather than in-app because §6.2 rule 3 then holds by construction: the server can only
+ask what the API answers, and anything a tool needs that the API lacks becomes an API change
+(§3.8). The equivalent query in each result's provenance is the API request the server actually
+made. And the server is deployed, upgraded and restarted without touching the application or its
+PHP runtime.
+
 Served over HTTP rather than stdio, because the point is reach: a remote endpoint needs no local
 install, which keeps the skills' setup to one line of configuration.
 
-The server shares no code with the skills' Python, and does not need to. Most of what a
-client-side toolkit would do is speak HTTP to TLCMap and cope with what comes back; a server
-inside the application queries the database instead. What both are clients of is §5 — one
-contract, two transports.
+To the API, the server is a single client carrying every agent's traffic. It therefore applies its
+own per-caller limits and caching rather than relying on the API's (⑱), and identifies itself in
+its `User-Agent` so TLCMap can tell its load apart.
+
+The server shares no code with the skills' Python, and does not need to. Both are clients of §5 —
+one contract, two transports.
 
 ### 6.2 Design rules
 
 1. **No model calls, ever.** The server exposes data and leaves judgement to the client that
    holds the model. This keeps prompts, adjudication and confidence banding in one place rather
-   than reimplemented in PHP — and it is why `tlcmap_resolve_candidates` returns candidates
+   than reimplemented in the server — and it is why `tlcmap_resolve_candidates` returns candidates
    rather than a choice.
 2. **Handles and summaries, never bulk.** A tool result returns
    `{count, extent, date_range, resource_uri}`; features live behind a resource the client
    fetches only if it needs them (§3.5).
-3. **The tools expose the API contract, nothing more.** A server with direct database access
-   *could* answer questions the HTTP API cannot, and must not: one contract, two transports, so a
-   question has the same answer whichever way it is asked. Anything worth adding is added to §5
+3. **The tools expose the API contract, nothing more.** One contract, two transports, so a
+   question has the same answer whichever way it is asked. The server has no other route to the
+   data (§6.1), so this holds by construction; the rule is what stops a tool from approximating a
+   missing capability by stitching several calls together. Anything worth adding is added to §5
    and reaches both.
 4. **Every result carries provenance** — the equivalent query, the fetch time, the record UIDs.
    An MCP-driven answer must be as retraceable as a skill-driven one.
@@ -763,8 +783,11 @@ Bulk payloads are MCP resources with stable URIs, not tool results:
 | `tlcmap://layer/{id}/text` | An uploaded text's full content |
 | `tlcmap://layer/{id}/crate` | The RO-Crate snapshot |
 
-Content-addressed where practical, so a client can cache and a provenance record can cite a
-specific state of the data.
+The server keeps no database, so it holds resource payloads in its own cache for a fixed period.
+A resource expires rather than being silently rebuilt: a client holding an expired URI calls the
+tool again. Retraceability does not depend on the cache, because each result's provenance already
+records the API request that produced it (§6.2 rule 4). Every payload carries a content hash, so a
+provenance record cites a specific state of the data and a rerun shows whether it has changed.
 
 ### 6.5 Tool surface stability
 
@@ -1097,24 +1120,15 @@ Two tracks run in parallel and are equally first-class: the **platform track** (
 upper layers are written against the API as it will be, and each phase names what must be deployed
 to tlcmap.org first.
 
-### Phase 0 — platform upgrade
-
-TLCMap moves from Laravel 5.8 on PHP 7 to Laravel 13 on PHP 8.3, one major version at a time,
-behind characterisation tests written before the first hop. The hops are made locally and released
-once — to staging for review, then to production. Estimated at two to four weeks for one developer
-working with an AI coding agent; approach and estimate in [LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md).
-
-**Deliverable:** the TLCMap application on Laravel 13 in production, behaving as it did on 5.8,
-with a test suite that carries forward into the API work.
-
 ### Phase A — the vertical slice
 
 Run as two milestones, so the first is demonstrable before the second begins.
 
-**A0 — spike, first days.** Confirm `laravel/mcp` covers what §6 needs — HTTP transport,
-resources, typed errors, separable read and write scopes (§12). It is the only open question that
-could redirect the architecture, and it should be answered before the API work commits to a
-tool-shaped contract. It runs on a fresh Laravel 13 application, so it does not wait for Phase 0.
+**A0 — server skeleton, first days.** The TypeScript server end to end against production: HTTP
+transport, one tool calling the live API, a resource handle, the provenance envelope, a typed
+error, and read and write registered as separate scopes. Deployed to staging the way it will run in
+production (§13 Q2). It fixes the server's shape before the API work commits to a tool-shaped
+contract.
 
 **A1 — discovery and rights.**
 *API:* ① ② ④ ⑦.
@@ -1185,15 +1199,17 @@ leaves resolution unproven (§9.5), so Phase D carries its own gold set, its own
 ### Phase E — write
 
 §5.4, scoped tokens, write tools behind the scope separated in Phase A, and `push` in
-`tlcmap-prepare`. Unblocks use case 7. Building the server inside the Laravel application pays off
-here: scoped tokens extend the existing authorisation model rather than standing up a parallel one.
+`tlcmap-prepare`. Unblocks use case 7. Tokens and permissions are the application's, extending its
+existing authorisation model; the server holds no credentials of its own and passes the caller's
+token through to the API, which decides.
 
 ### Sequencing notes
 
 - **Design and construction can proceed in parallel; *finishing* cannot.** A capability is not done
   until its API prerequisite is live on tlcmap.org.
-- **Phase 0 gates construction in the TLCMap application, not design.** API and MCP work is built
-  on the upgraded codebase, never merged into the upgrade; designing it proceeds in parallel.
+- **The API work is built on the application as it stands** — Laravel 5.8 on PHP 7.4. The Laravel
+  upgrade ([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)) is deferred and nothing here waits on it;
+  the MCP server is unaffected by it either way.
 - **§5.1 Tier 1 is the long pole for the whole programme.** Phase A waits on it.
 - **Time to visible value is the metric to watch.** A1 exists so something is demonstrable early;
   if it slips past a few months, the scope is wrong, not the plan.
@@ -1252,13 +1268,16 @@ works, because it contains none.
 slice that proves it. The compensation is that it is the item most of the rest depends on, so the
 risk is taken early rather than avoided.
 
-**The platform upgrade.** Every maintained PHP MCP library needs PHP 8, and TLCMap runs Laravel
-5.8 on PHP 7 with no tests. Phase 0 is therefore on the critical path, and its tests are written
-before anything is upgraded ([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)).
+**An unsupported platform under the API.** The API work is built on Laravel 5.8 and PHP 7.4, both
+out of support, in an application with no tests. Each §5 change ships with its own tests, so that
+it is protected now and carries through the upgrade when it comes
+([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)). The write phase's scoped tokens (§5.4) need an
+approach that works on 5.8.
 
-**PHP MCP tooling.** The SDK ecosystem is thinner in PHP than in TypeScript or Python; the server
-uses the first-party `laravel/mcp`. Whether it covers §6 is spiked in A0, before the API work
-commits to a tool-shaped contract.
+**A third language.** The server adds TypeScript and a Node service to a team whose application is
+PHP and whose skills are Python. The server is kept thin — validation, shape, provenance — so that
+there is little of it to own, and A0 settles how it is deployed and monitored before it carries
+anything.
 
 **Semantic drift in the tool surface.** Agents adapt to renamed tools; they cannot detect a
 parameter whose meaning changed. §6.5's rename-rather-than-redefine rule is the mitigation.
@@ -1275,17 +1294,17 @@ review bucket and the human gates are the product, not friction in it.
 
 ## 13. Open questions
 
-1. **Does `laravel/mcp` cover what §6 needs?** Spike in A0, on a fresh Laravel 13 application. The
-   only question that could redirect the architecture.
-2. **Who runs and owns the ground-truth harvest?** One polite pass over 2,118 layer feeds computing
+1. **Who runs and owns the ground-truth harvest?** One polite pass over 2,118 layer feeds computing
    true extents, held in `evals/`. It is the only thing standing between "discovery recall 1.0" and
    an unfalsifiable claim — and it must stay an evaluation artefact rather than drifting into the
    product (§9.5).
-3. **Where does `mcp.tlcmap.org` run**, and does it share the application's infrastructure?
-   Relevant because there is no rate limiting today and a public MCP endpoint makes that pressing.
-4. **Is the tool surface right at twelve?** Fewer and richer, or more and finer? Phase A gives
+2. **Where does `mcp.tlcmap.org` run, and who operates it?** The simplest form is a Node service
+   under systemd on the application's server, behind Apache as a reverse proxy; a separate host
+   isolates its load. Relevant because there is no rate limiting today and a public MCP endpoint
+   makes that pressing.
+3. **Is the tool surface right at twelve?** Fewer and richer, or more and finer? Phase A gives
    evidence for six of them; the instinct to resist is one tool per endpoint.
-5. **Which second region tests generalisation?** The skill is region-parameterised from the start,
+4. **Which second region tests generalisation?** The skill is region-parameterised from the start,
    so this is about what to *verify*, not what to support. A sparse or remote region, and one
    carrying more restricted layers, would each probe a different edge cheaply once A1 works. A
    region that *exceeds* the ceiling is Phase B's, because the honest answer there is ③ rather than

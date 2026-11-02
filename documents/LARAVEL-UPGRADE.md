@@ -1,10 +1,13 @@
 # TLCMap Laravel upgrade
 
-**Status:** proposal · **Date:** 2026-11-02
+**Status:** deferred to a later phase · **Date:** 2026-11-02
 
-Companion to **[DESIGN.md](./DESIGN.md)**, where this upgrade is Phase 0 of the plan
-([§10](./DESIGN.md#10-plan)). This document covers why, to what, how and how long. It is not an
-upgrade checklist; that is written when the work starts.
+Companion to **[DESIGN.md](./DESIGN.md)**. The plan there does not depend on this upgrade: the MCP
+server is a separate TypeScript service that reaches TLCMap through its public API
+([DESIGN.md §6.1](./DESIGN.md#61-architecture)), and the API work is built on the application as
+it stands ([§10](./DESIGN.md#10-plan)). This document covers why, to what, how and how long, for
+when the upgrade is scheduled. It is not an upgrade checklist; that is written when the work
+starts.
 
 ---
 
@@ -14,25 +17,13 @@ The TLCMap application runs **Laravel 5.8 on PHP 7** (`laravel/framework 5.8.*`,
 `composer.json`). Both are long out of support: Laravel 5.8's last release was 5.8.38 on
 2020-04-14, and PHP 7.4, the last 7.x line, stopped receiving security fixes in November 2022.
 
-That alone justifies the upgrade. Layer 2 sets the timing. The MCP server is built inside the
-application ([DESIGN.md §6.1](./DESIGN.md#61-architecture)), and every maintained PHP MCP library
-needs PHP 8:
-
-| Package | Version | Requires |
-| --- | --- | --- |
-| `laravel/mcp` — first-party | v1.1.2 | PHP ^8.2; Laravel ^11.45.3, ^12.41.1 or ^13.0 |
-| `mcp/sdk` — official PHP SDK | v0.9.0 | PHP ^8.1; framework-independent, pre-1.0 |
-| `php-mcp/laravel` — community | 4.0.0 | PHP ^8.2; Laravel ^9.46 or later |
-
-*Checked against Packagist, 2026-11-02.*
-
-The server is built on `laravel/mcp`: first-party, past 1.0, and supported on the current Laravel
-release. That needs Laravel 11 or later.
+That alone justifies the upgrade: security fixes, and access to the maintained PHP ecosystem,
+much of which now requires PHP 8.
 
 ## 2. Target
 
 **Laravel 13 on PHP 8.3 or later.** The current major (13.39.0 at 2026-11-02, requiring
-PHP ^8.3), so the longest support window, and supported by `laravel/mcp`.
+PHP ^8.3), so the longest support window.
 
 In scope: the framework, the PHP runtime, and every dependency those force — including replacing
 abandoned packages and removing unused ones.
@@ -264,6 +255,10 @@ needs no changes. It excludes elapsed time waiting on the TLCMap team's staging 
 - **Ubuntu 22.04's remaining life.** Its standard support ends in 2027, and the PPA supplies PHP for
   supported releases only. Moving the servers to a newer Ubuntu LTS is outside this upgrade, but
   should be planned soon after it.
+- **More to carry the longer it waits.** The API work in
+  [DESIGN.md §5](./DESIGN.md#5-layer-1--the-api) is built on 5.8 meanwhile, and every line of it
+  goes through every hop. It ships with its own tests, which join the characterisation suite (§3.2),
+  and the measurements and estimate here (§4, §5) are re-taken when the upgrade is scheduled.
 - **Freeze on the application.** Feature work merged during the upgrade has to be carried through
   every subsequent hop. A short upgrade beats a parallel one.
 
