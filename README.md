@@ -8,7 +8,7 @@ any of it.
 
 ## Status
 
-**Design complete; implementation not started.** The two documents below are the current
+**Design complete; implementation not started.** The documents below are the current
 deliverable. Nothing in `skills/` exists yet.
 
 ## Documents
@@ -17,6 +17,7 @@ deliverable. Nothing in `skills/` exists yet.
 | --- | --- |
 | [documents/DESIGN.md](documents/DESIGN.md) | The whole design — platform assessment, principles, the three layers, the build plan, risks, open questions |
 | [documents/USE-CASES.md](documents/USE-CASES.md) | The eight research use cases in full, with example prompts and worked examples from real TLCMap data |
+| [documents/LARAVEL-UPGRADE.md](documents/LARAVEL-UPGRADE.md) | Upgrading the TLCMap application from Laravel 5.8 to 13 — the prerequisite for the MCP server, with a time estimate |
 
 Read DESIGN.md first. USE-CASES.md is the detail behind its §8.
 
@@ -72,6 +73,7 @@ committed.
 ```sh
 pandoc documents/DESIGN.md    -o documents/DESIGN.docx    --toc --toc-depth=3
 pandoc documents/USE-CASES.md -o documents/USE-CASES.docx --toc --toc-depth=3
+pandoc documents/LARAVEL-UPGRADE.md -o documents/LARAVEL-UPGRADE.docx
 ```
 
 ## Related repositories

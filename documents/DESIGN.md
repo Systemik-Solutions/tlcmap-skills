@@ -1,9 +1,10 @@
 # TLCMap AI — design
 
-**Status:** design for build · **Date:** 2026-09-25
+**Status:** design for build · **Date:** 2026-11-02
 
-Companion document: **[USE-CASES.md](./USE-CASES.md)** — the eight research use cases in full,
-with example prompts and worked examples from real TLCMap data.
+Companion documents: **[USE-CASES.md](./USE-CASES.md)** — the eight research use cases in full,
+with example prompts and worked examples from real TLCMap data; and
+**[LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)** — the platform upgrade that is Phase 0 of the plan.
 
 ---
 
@@ -20,7 +21,7 @@ with example prompts and worked examples from real TLCMap data.
 | [7. Layer 3 — the skills](#7-layer-3--the-skills) | Workflow and judgement |
 | [8. Use cases](#8-use-cases) | Mapping to USE-CASES.md |
 | [9. The vertical slice](#9-the-vertical-slice) | The proof of concept |
-| [10. Plan](#10-plan) | Phases A–E |
+| [10. Plan](#10-plan) | Phase 0, then Phases A–E |
 | [11. Measurement](#11-measurement) | How we know it works |
 | [12. Risks and ethics](#12-risks-and-ethics) | |
 | [13. Open questions](#13-open-questions) | |
@@ -585,6 +586,10 @@ absorb them:
 **PHP and Laravel, inside the TLCMap application** — same stack, same deployment, same database,
 and at the write phase the same authentication and permission model.
 
+Built on **`laravel/mcp`**, Laravel's first-party MCP package, which requires Laravel 11 or later
+and PHP 8.2 or later. TLCMap runs Laravel 5.8 on PHP 7, so the server waits on the platform
+upgrade to Laravel 13 ([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)).
+
 ```
   Agent host (Claude Code / Desktop / site chatbot / other)
         │  MCP over HTTP
@@ -1092,13 +1097,24 @@ Two tracks run in parallel and are equally first-class: the **platform track** (
 upper layers are written against the API as it will be, and each phase names what must be deployed
 to tlcmap.org first.
 
+### Phase 0 — platform upgrade
+
+TLCMap moves from Laravel 5.8 on PHP 7 to Laravel 13 on PHP 8.3, one major version at a time,
+behind characterisation tests written before the first hop. The hops are made locally and released
+once — to staging for review, then to production. Estimated at two to four weeks for one developer
+working with an AI coding agent; approach and estimate in [LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md).
+
+**Deliverable:** the TLCMap application on Laravel 13 in production, behaving as it did on 5.8,
+with a test suite that carries forward into the API work.
+
 ### Phase A — the vertical slice
 
 Run as two milestones, so the first is demonstrable before the second begins.
 
-**A0 — spike, first days.** Confirm the PHP MCP tooling holds up (§12). It is the only open
-question that could redirect the architecture, and it should be answered before the API work
-commits to a tool-shaped contract.
+**A0 — spike, first days.** Confirm `laravel/mcp` covers what §6 needs — HTTP transport,
+resources, typed errors, separable read and write scopes (§12). It is the only open question that
+could redirect the architecture, and it should be answered before the API work commits to a
+tool-shaped contract. It runs on a fresh Laravel 13 application, so it does not wait for Phase 0.
 
 **A1 — discovery and rights.**
 *API:* ① ② ④ ⑦.
@@ -1176,6 +1192,8 @@ here: scoped tokens extend the existing authorisation model rather than standing
 
 - **Design and construction can proceed in parallel; *finishing* cannot.** A capability is not done
   until its API prerequisite is live on tlcmap.org.
+- **Phase 0 gates construction in the TLCMap application, not design.** API and MCP work is built
+  on the upgraded codebase, never merged into the upgrade; designing it proceeds in parallel.
 - **§5.1 Tier 1 is the long pole for the whole programme.** Phase A waits on it.
 - **Time to visible value is the metric to watch.** A1 exists so something is demonstrable early;
   if it slips past a few months, the scope is wrong, not the plan.
@@ -1234,9 +1252,13 @@ works, because it contains none.
 slice that proves it. The compensation is that it is the item most of the rest depends on, so the
 risk is taken early rather than avoided.
 
-**PHP MCP tooling.** The SDK ecosystem is thinner in PHP than in TypeScript or Python. This sits on
-the critical path, so it is spiked in the opening days of Phase A, before the API work commits to a
-tool-shaped contract.
+**The platform upgrade.** Every maintained PHP MCP library needs PHP 8, and TLCMap runs Laravel
+5.8 on PHP 7 with no tests. Phase 0 is therefore on the critical path, and its tests are written
+before anything is upgraded ([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)).
+
+**PHP MCP tooling.** The SDK ecosystem is thinner in PHP than in TypeScript or Python; the server
+uses the first-party `laravel/mcp`. Whether it covers §6 is spiked in A0, before the API work
+commits to a tool-shaped contract.
 
 **Semantic drift in the tool surface.** Agents adapt to renamed tools; they cannot detect a
 parameter whose meaning changed. §6.5's rename-rather-than-redefine rule is the mitigation.
@@ -1253,8 +1275,8 @@ review bucket and the human gates are the product, not friction in it.
 
 ## 13. Open questions
 
-1. **Does the PHP MCP tooling hold up?** Spike in week one of Phase A. The only question that could
-   redirect the architecture.
+1. **Does `laravel/mcp` cover what §6 needs?** Spike in A0, on a fresh Laravel 13 application. The
+   only question that could redirect the architecture.
 2. **Who runs and owns the ground-truth harvest?** One polite pass over 2,118 layer feeds computing
    true extents, held in `evals/`. It is the only thing standing between "discovery recall 1.0" and
    an unfalsifiable claim — and it must stay an evaluation artefact rather than drifting into the
