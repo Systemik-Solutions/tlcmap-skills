@@ -147,13 +147,21 @@ Two boundaries carry most of the design:
 2. **Tools never see HTTP.** A tool asks the upstream layer for a URL and receives either a cache
    entry or a typed error.
 
-**Stack.** TypeScript, ES modules, strict mode. `@modelcontextprotocol/server`,
+**Stack.** TypeScript 6.0, ES modules, strict mode — not 7, because `typescript-eslint` 8.72
+requires TypeScript below 6.1. `@modelcontextprotocol/server`, `@modelcontextprotocol/node`,
 `@modelcontextprotocol/express`, Express 5, zod 4, `express-rate-limit`. Tests on Vitest, driven by
 `@modelcontextprotocol/client`. Node's built-in `fetch` for upstream requests.
 
 **Transport.** Streamable HTTP, **stateless** (no `Mcp-Session-Id`), with **JSON responses
-enabled** so every reply is a single JSON body and no response is a server-sent event stream.
+enabled** so every reply is a single JSON body and no response is a server-sent event stream. The
+SDK's `createMcpHandler` builds a fresh server instance per request from a factory and serves both
+the 2026-07-28 protocol and stateless 2025-era clients; `toNodeHandler` mounts it on Express.
 `POST /mcp` handles MCP; `GET /mcp` and `DELETE /mcp` return `405`.
+
+**Host validation.** The SDK's Express app validates the `Host` header and by default admits only
+localhost names. Behind Apache with `ProxyPreserveHost On` the header is `test-mcp.tlcmap.org`, so
+the allowed hosts are the `PUBLIC_URL` hostname plus `localhost` and `127.0.0.1`; any other `Host`
+is `400`.
 
 ---
 
@@ -165,7 +173,7 @@ The A0 subset of the tool in [DESIGN.md §6.3](../DESIGN.md#tlcmap_get_layer).
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `layer_id` | integer | ≥ 1 |
+| `layer_id` | integer | 1 to 2147483647, the range of the database's layer ID |
 
 No other parameter is accepted. Unknown fields are rejected, not ignored.
 
@@ -231,7 +239,8 @@ returns no entries.
   under the byte cap, or the process restarted — the read fails with `RESOURCE_EXPIRED`, and the
   client calls the tool again ([§6.4](../DESIGN.md#64-resources)). A resource is never silently
   rebuilt from a newer fetch.
-- `{id}` is validated as for `layer_id`; anything else is `INVALID_ARGUMENT`.
+- `{id}` must be a canonical decimal layer ID — no sign, no leading zero, no fraction, within
+  `layer_id`'s range — so `007` is never read as layer 7. Anything else is `INVALID_ARGUMENT`.
 
 ---
 
@@ -283,7 +292,7 @@ Resource-read failures are MCP protocol errors carrying the same `{code, message
 
 | Code | Raised when | `details` |
 | --- | --- | --- |
-| `INVALID_ARGUMENT` | Input fails its schema. | The failing field and rule. |
+| `INVALID_ARGUMENT` | A resource URI whose `{id}` is not a canonical layer ID (§5). Tool input that fails its schema never reaches the handler: the SDK rejects it as an `isError` result whose text begins `Input validation error:` and names the field, without `structuredContent`. | The failing field and rule. |
 | `UPSTREAM_CONTRACT_VIOLATION` | A `2xx` response that is not JSON or does not have the shape in §4; or any `3xx`. Redirects are never followed. | `status`, the `request`, what was expected, and the API's own message if it supplied one — for the current missing-layer response, the `warnnig` text verbatim. |
 | `LAYER_PRIVATE` | Upstream `403`. | `status`, `request`, the API's JSON body. |
 | `LAYER_NOT_FOUND` | Upstream `404`. | As above. |
@@ -483,7 +492,7 @@ every push; none of them touch the network.
 | --- | --- |
 | Layer 206, full | Undated; `warning: "None"`; no `license` key |
 | Layer 1125, full | Dated; the `"Closed…"` licence |
-| Layer 2749, trimmed | `metadata` byte-for-byte; `features` cut to the first 20, to keep 4.5 MB out of the repository. The HTML warning must pass through unchanged. |
+| Layer 2749, trimmed | `metadata` unchanged; `features` cut to the first 20, to keep 4.5 MB out of the repository. The HTML warning must pass through unchanged. |
 | Missing layer | The current `200` with `warnnig` and no `features` |
 
 Synthetic fixtures cover what production does not show on demand: features without geometry, mixed
@@ -528,8 +537,8 @@ with the date:
 3. `tlcmap_get_layer` on 206 and on 2749 returns correct summaries with provenance; 2749's warning
    is byte-for-byte the API's, and 206's `"None"` is preserved.
 4. Reading the returned resource URI yields the feed, with a `sha256` matching the tool's.
-5. `layer_id: "abc"` returns `INVALID_ARGUMENT`; layer 99999999 returns
-   `UPSTREAM_CONTRACT_VIOLATION` carrying the API's message.
+5. `layer_id: "abc"` returns the SDK's input-validation error naming `layer_id`; layer 99999999
+   returns `UPSTREAM_CONTRACT_VIOLATION` carrying the API's message.
 6. `/healthz` is `200`, and `journalctl -u tlcmap-mcp` shows a `tool` line and an `upstream` line for
    each call.
 7. After `systemctl restart tlcmap-mcp`, reading the earlier resource URI returns
