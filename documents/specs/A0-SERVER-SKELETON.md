@@ -154,7 +154,8 @@ requires TypeScript below 6.1. `@modelcontextprotocol/server`, `@modelcontextpro
 `@modelcontextprotocol/client`. Node's built-in `fetch` for upstream requests.
 
 **Transport.** Streamable HTTP, **stateless** (no `Mcp-Session-Id`), with **JSON responses
-enabled** so every reply is a single JSON body and no response is a server-sent event stream. The
+enabled** for the 2026-07-28 protocol, so no stream stays open. 2025-era clients are answered by the
+SDK's stateless fallback, which replies with a single-event SSE stream that ends with the result. The
 SDK's `createMcpHandler` builds a fresh server instance per request from a factory and serves both
 the 2026-07-28 protocol and stateless 2025-era clients; `toNodeHandler` mounts it on Express.
 `POST /mcp` handles MCP; `GET /mcp` and `DELETE /mcp` return `405`.
@@ -162,7 +163,9 @@ the 2026-07-28 protocol and stateless 2025-era clients; `toNodeHandler` mounts i
 **Host validation.** The SDK's Express app validates the `Host` header and by default admits only
 localhost names. Behind Apache with `ProxyPreserveHost On` the header is `test-mcp.tlcmap.org`, so
 the allowed hosts are the `PUBLIC_URL` hostname plus `localhost` and `127.0.0.1`; any other `Host`
-is `400`.
+is `403`. Binding to a loopback address also turns on the SDK's `Origin` validation: requests
+without an `Origin` header — every non-browser client, Claude Code among them — pass, and a
+browser `Origin` other than localhost is `403`. A0 keeps that default.
 
 ---
 
@@ -460,7 +463,8 @@ It keeps the three most recent releases. Rollback is the same switch, by hand.
   `ProxyPreserveHost On` and `ProxyTimeout 90`, so Apache never cuts off a request still within the
   60 s upstream timeout.
 - TLS from `certbot --apache`.
-- No SSE configuration is needed, because the transport sends JSON responses only (§3).
+- `/mcp` is proxied with `flushpackets=on` and excluded from compression, so the single-event SSE
+  replies to 2025-era clients (§3) are never held back.
 
 **`deploy/DEPLOY.md`** documents the one-time setup — the DNS A record, NodeSource, the user and
 directories, the unit, the vhost and modules, certbot, confirming port 3100 is free — then the

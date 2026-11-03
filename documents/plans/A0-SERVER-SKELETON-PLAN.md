@@ -695,7 +695,7 @@ export function startTestServer(env?: Record<string, string>): Promise<{ url: UR
     `/healthz` is still `200`.
   - Proxy trust: `app.get('trust proxy fn')('127.0.0.1', 0)` is `true`;
     `app.get('trust proxy fn')('203.0.113.5', 0)` is `false`.
-  - `Host: evil.example` on `POST /mcp` → `400`; `Host: test-mcp.tlcmap.org` → accepted.
+  - `Host: evil.example` on `POST /mcp` → `403`; `Host: test-mcp.tlcmap.org` → accepted.
   - `GET /mcp` and `DELETE /mcp` → `405`.
   - `/healthz` → `200` with the `HealthBody` keys; `upstream.requests_total` equals the fake's
     request count; it makes no request to the fake.
