@@ -127,7 +127,7 @@ learn to survive (§3.8).
 | `sort=anything` drops records with no start *or* end date | A 216-record search returns 55 with `sort=title`. Same for `line=time`. |
 | Dated searches exclude undated records entirely | Most gazetteer records are undated; adding a date bound can cut results by an order of magnitude. |
 | >5,000 matches → `302` to `/maxpaging` (HTML) | A client following redirects gets HTML with a `200` where it expected GeoJSON. `paging=1` does not help — the ceiling is checked against the total. |
-| Private or missing layer → `200` with a FeatureCollection, no `features` | Detect by the **absence of `features`**; the warning key is misspelled `warnnig` here. |
+| Private or missing layer → `200` with a FeatureCollection whose `features` is empty | Looks like an empty public layer, except that `metadata` carries only a message and no `layer_id`; the warning key is misspelled `warnnig` here. Checked 2026-11-03. |
 | Unparseable `extended_data` expression is **discarded silently** | See below. The most dangerous behaviour in the API. |
 | Search output sets `udateend = udatestart` | Every record looks like a single instant on a timeline. Layer feeds are correct. |
 | `name` matches `title` only, never `placename` | The parameter people reach for first is the one that misses. |
@@ -456,8 +456,8 @@ two of those four are malformed (§2.2), so they stay a separate hint.
 | Situation | Now | Should be |
 | --- | --- | --- |
 | Over the 5,000 ceiling | `302` → `/maxpaging` HTML | `413` + JSON `{error, total, suggestions}` |
-| Layer private | `200`, no `features`, key `warnnig` | `403` + JSON |
-| Layer missing | `200`, no `features` | `404` + JSON |
+| Layer private | `200`, empty `features`, key `warnnig` | `403` + JSON |
+| Layer missing | `200`, empty `features` | `404` + JSON |
 | Unparseable `extended_data` | `200`, filter silently dropped | `400` + JSON naming the expression |
 | Missing analysis parameter | `500` | `400` + JSON naming the parameter |
 | Bad `format` on `/api` | `302` → home page | `400` + JSON |

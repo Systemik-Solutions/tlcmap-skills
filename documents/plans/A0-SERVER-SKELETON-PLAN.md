@@ -457,7 +457,7 @@ export type FakeRoute = { status?: number; headers?: Record<string, string>; bod
   counts and the trimming rule.
 - [ ] **Step 2: Run** `npm run capture-fixtures`, then commit the fixtures:
   `git add scripts test/fixtures && git commit -m "Capture production fixtures"`. Check
-  `CAPTURED.md` shows 52 features for 206, 94 for 1125, and no `features` key for the missing layer.
+  `CAPTURED.md` shows 52 features for 206, 94 for 1125, and an empty `features` array with no `metadata.layer_id` for the missing layer.
 - [ ] **Step 3: Write `test/fake-tlcmap.ts`** — a `node:http` server on `127.0.0.1:0` recording
   every request's path and headers. `streamBytes` streams that many bytes of `[` padding in 64 KB
   chunks.
@@ -515,6 +515,9 @@ export interface LayerService {
   stats(): { upstream: UpstreamStats; cache: { entries: number; bytes: number } };
 }
 export function layerUrl(baseUrl: URL, layerId: number): URL;   // {base}/layers/{id}/json
+export function checkLayerIdentity(summary: LayerSummary, layerId: number): void;
+  // throws TlcmapError UPSTREAM_CONTRACT_VIOLATION unless summary.metadata.layer_id === layerId;
+  // details: {expected: `metadata.layer_id to equal ${layerId}`, api_metadata: summary.metadata}
 export function createLayerService(deps: { client: UpstreamClient; cache: ByteLruCache<LayerEntry>;
   limiter: Limiter; baseUrl: URL; serverId: string; logger: Logger }): LayerService;
 ```
@@ -531,8 +534,13 @@ export function createLayerService(deps: { client: UpstreamClient; cache: ByteLr
   - **A failed shared fetch rejects every joiner and is not cached:** a stub that rejects with
     `UPSTREAM_UNAVAILABLE` → both concurrent callers reject with that code; `peekLayer(206)` is
     `undefined`; a following `getLayer` calls the client again.
-  - A body that fails `summariseLayerFeed` (missing-layer fixture) rejects with
+  - A body that fails `summariseLayerFeed` (a synthetic fixture with no `features`) rejects with
     `UPSTREAM_CONTRACT_VIOLATION` and is not cached.
+  - **The missing-layer fixture** (`features: []`, `metadata` holding only `warnnig`) requested as
+    layer 99999999 rejects with `UPSTREAM_CONTRACT_VIOLATION`, `details.api_metadata` deep-equal to
+    the fixture's `metadata`, and is not cached. `checkLayerIdentity` unit tests: matching
+    `layer_id` passes; absent, string `"206"`, or a different number throws. A real layer with zero
+    features and the right `layer_id` summarises normally (`record_count` 0).
   - `peekLayer` returns the cached entry and never calls the client.
   - `stats().upstream`: `requests_total` counts client calls only (not hits); `last_success_at`
     and `last_error` update.
@@ -541,7 +549,7 @@ export function createLayerService(deps: { client: UpstreamClient; cache: ByteLr
 - [ ] **Step 3: Run** both files — Expected: FAIL.
 - [ ] **Step 4: Implement** — the cache key is `layerUrl(...).href`. The order is: cache `get`,
   else `SingleFlight.do(key, () => limiter.run(() => client.get(url)))`, then summarise, then
-  `cache.set`. `sizeOf` for the cache is `entry.body.length`. Only a fully summarised entry is
+  `checkLayerIdentity`, then `cache.set`. `sizeOf` for the cache is `entry.body.length`. Only a fully summarised entry is
   cached.
 - [ ] **Step 5: Run** — Expected: PASS.
 - [ ] **Step 6: Commit** — `git commit -m "Add provenance and the layer service"`.
@@ -730,7 +738,8 @@ export function startTestServer(env?: Record<string, string>): Promise<{ url: UR
     `name`, `warning`; `summariseLayerFeed` succeeds; `record_count` > 0.
   - Layer 1125: every feature has a non-empty string `properties.id`; at least one has numeric
     `udatestart` and `udateend`.
-  - Layer 99999999: `client.get` resolves `200` and `summariseLayerFeed` throws
+  - Layer 99999999: `client.get` resolves `200`, `summariseLayerFeed` succeeds with `record_count` 0,
+    and `checkLayerIdentity(summary, 99999999)` throws
     `UPSTREAM_CONTRACT_VIOLATION`. The test's comment: *"Fails when DESIGN.md §5.1 ② lands. Then
     expect client.get to throw LAYER_NOT_FOUND, and update spec §14."*
 - [ ] **Step 3: Run** `npm run test:prod` — Expected: PASS against today's production.

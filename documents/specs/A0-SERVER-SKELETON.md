@@ -99,8 +99,9 @@ maintenance). A0 runs on **Node 24**, from the NodeSource apt repository.
 | 2749 Public schools … Aboriginal and/or Torres Strait Islander students | 4.5 MB | 1,602 | 1,602 | `warning` is HTML, beginning `<p>Aboriginal and/or Torres Strait Islander Peoples are advised…` |
 | 461 Weather stations | 34.9 MB | 17,917 | 17,917 | 13.8 s to download; about 61 MB of heap once parsed in Node 24 |
 
-**A missing layer** (`/layers/99999999/json`) returns `200` with a FeatureCollection that has no
-`features` key and a `metadata.warnnig` message. §5.1 ② has not landed.
+**A missing layer** (`/layers/99999999/json`) returns `200` with a FeatureCollection whose
+`features` is an empty array and whose `metadata` holds only a `warnnig` message — no `layer_id`,
+no `name`. By shape alone it is an empty layer. §5.1 ② has not landed.
 
 ---
 
@@ -212,10 +213,13 @@ Every field is computed by code from the one response:
 | `ungeolocated_count` | Features whose `geometry` is null or absent. Additive to §6.3; it is what lets a brief state "records without coordinates" ([§9.4](../DESIGN.md#94-success-criteria) criterion 5). |
 | `resource_uri` | `tlcmap://layer/{layer_id}/features`. |
 
-**The response must be the expected shape.** The tool reads `features` as an array, each feature's
-`properties.id` as a non-empty string, and `udatestart` / `udateend`, where present and not null, as
-finite numbers. A response that does not satisfy this is `UPSTREAM_CONTRACT_VIOLATION` (§7). The
-tool never returns a summary of a response it could not read.
+**The response must be the expected shape, and about the layer requested.** The tool reads
+`features` as an array, each feature's `properties.id` as a non-empty string, and `udatestart` /
+`udateend`, where present and not null, as finite numbers; and `metadata.layer_id` must equal the
+requested `layer_id`. A response that does not satisfy this is `UPSTREAM_CONTRACT_VIOLATION` (§7).
+The tool never returns a summary of a response it could not read, nor of a response describing some
+other layer or none — which is what keeps today's missing-layer response from passing as an empty
+layer.
 
 Summarising one response is code computing over data TLCMap returned. It is not the stitching of
 several calls to approximate a missing capability that rule 3 forbids.
@@ -293,7 +297,7 @@ Resource-read failures are MCP protocol errors carrying the same `{code, message
 | Code | Raised when | `details` |
 | --- | --- | --- |
 | `INVALID_ARGUMENT` | A resource URI whose `{id}` is not a canonical layer ID (§5). Tool input that fails its schema never reaches the handler: the SDK rejects it as an `isError` result whose text begins `Input validation error:` and names the field, without `structuredContent`. | The failing field and rule. |
-| `UPSTREAM_CONTRACT_VIOLATION` | A `2xx` response that is not JSON or does not have the shape in §4; or any `3xx`. Redirects are never followed. | `status`, the `request`, what was expected, and the API's own message if it supplied one — for the current missing-layer response, the `warnnig` text verbatim. |
+| `UPSTREAM_CONTRACT_VIOLATION` | A `2xx` response that is not JSON, does not have the shape in §4, or whose `metadata.layer_id` is not the requested layer; or any `3xx`. Redirects are never followed. | `status`, the `request`, what was expected, and the API's `metadata` object verbatim as `api_metadata` — for the current missing-layer response, that carries the `warnnig` text. |
 | `LAYER_PRIVATE` | Upstream `403`. | `status`, `request`, the API's JSON body. |
 | `LAYER_NOT_FOUND` | Upstream `404`. | As above. |
 | `UPSTREAM_UNAVAILABLE` | Timeout, network failure, `429` or `5xx`. | `status` if any, `request`, elapsed time, and upstream `Retry-After` if sent. |
@@ -302,10 +306,12 @@ Resource-read failures are MCP protocol errors carrying the same `{code, message
 | `RESOURCE_EXPIRED` | A resource read with no fresh cache entry. | The URI, and the tool to call. |
 
 `UPSTREAM_CONTRACT_VIOLATION` is the error a missing or private layer produces **today**. It does
-not claim to know why `features` is absent, and so never guesses between "not found" and "private";
-it reports that the API returned an unexpected shape and passes on what the API said. That is
-ordinary parsing — the server checks that the field it is about to read exists — and not the
-content sniffing [§7.5](../DESIGN.md#75-what-is-deliberately-not-built) rules out. When §5.1 ②
+not claim to know why the response does not describe the requested layer, and so never guesses
+between "not found" and "private"; it reports that the API returned something other than the layer
+asked for and passes on what the API said. That is ordinary validation — the server checks that the
+response is about the thing it requested — and not the content sniffing
+[§7.5](../DESIGN.md#75-what-is-deliberately-not-built) rules out: no message text or key name, such
+as `warnnig`, is ever inspected. When §5.1 ②
 lands, the same request becomes `LAYER_NOT_FOUND` with no server change.
 
 Any other upstream `4xx` is `UPSTREAM_CONTRACT_VIOLATION`, since `tlcmap_get_layer` sends nothing
@@ -493,7 +499,7 @@ every push; none of them touch the network.
 | Layer 206, full | Undated; `warning: "None"`; no `license` key |
 | Layer 1125, full | Dated; the `"Closed…"` licence |
 | Layer 2749, trimmed | `metadata` unchanged; `features` cut to the first 20, to keep 4.5 MB out of the repository. The HTML warning must pass through unchanged. |
-| Missing layer | The current `200` with `warnnig` and no `features` |
+| Missing layer | The current `200` with `warnnig`, empty `features` and no `layer_id` |
 
 Synthetic fixtures cover what production does not show on demand: features without geometry, mixed
 geometry types, a feature without `properties.id`, a non-numeric `udatestart`, malformed JSON. The
@@ -507,7 +513,7 @@ HTTP server serving the fixtures, driven by `@modelcontextprotocol/client` over 
   the fixture's.
 - A resource read returns bytes whose `sha256` equals the tool's.
 - A second call is a cache hit with the original `fetched_at`.
-- Each error path end to end: `200` without `features`, a `3xx`, a `5xx`, a timeout, the size cap,
+- Each error path end to end: `200` for a layer other than the one requested, a `3xx`, a `5xx`, a timeout, the size cap,
   `SERVER_BUSY`, `RESOURCE_EXPIRED`, `INVALID_ARGUMENT`.
 - `429` past the rate limit; a spoofed `X-Forwarded-For` from a non-loopback peer is ignored.
 - `/healthz` shape; `GET /mcp` is `405`.
