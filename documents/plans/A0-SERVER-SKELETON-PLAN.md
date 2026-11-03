@@ -23,7 +23,7 @@ scripts.
 **Spec:** [A0-SERVER-SKELETON.md](../specs/A0-SERVER-SKELETON.md). Read it first; this plan argues from
 it and cites it as "spec §n".
 
-**Where the work happens:** the `tlcmap-mcp` repository (`git@github.com:Systemik-Solutions/tlcmap-mcp.git`,
+**Where the work happens:** the `tlcmap-mcp` repository (`https://github.com/Systemik-Solutions/tlcmap-mcp.git`,
 local clone `C:\AIProject\tlcmap-mcp`, currently a one-line README). All paths below are relative
 to that repository. Task 12 runs on the staging server.
 
@@ -778,7 +778,7 @@ export function startTestServer(env?: Record<string, string>): Promise<{ url: UR
   `RequestHeader set X-Forwarded-Proto https`. The certificate lines are left for `certbot --apache`
   to add.
 - [ ] **Step 7: Write `deploy/deploy.sh <git-ref>`** — `set -euo pipefail`; must run as root;
-  clones `git@github.com:Systemik-Solutions/tlcmap-mcp.git` at the ref into
+  clones `https://github.com/Systemik-Solutions/tlcmap-mcp.git` at the ref into
   `/opt/tlcmap-mcp/releases/<sha>`; `npm ci && npm run build && npm prune --omit=dev` as
   `tlcmap-mcp`; records the previous `current` target; `ln -sfn` the new one;
   `systemctl restart tlcmap-mcp`; polls `http://127.0.0.1:${PORT:-3100}/healthz` once a second for
@@ -795,7 +795,7 @@ export function startTestServer(env?: Record<string, string>): Promise<{ url: UR
      `/usr/bin/node`.
   3. `sudo useradd --system --home /opt/tlcmap-mcp --shell /usr/sbin/nologin tlcmap-mcp`, plus the
      directories and the env file (`root:tlcmap-mcp`, `0640`).
-  4. A deploy key so root can clone the repository.
+  4. Clone the repository over HTTPS as root (it is public; no deploy key).
   5. Confirm port 3100 is free: `ss -ltnp | grep 3100` prints nothing.
   6. Install the unit and `systemctl enable tlcmap-mcp`.
   7. `a2enmod proxy proxy_http headers ssl`, install the vhost, `apachectl configtest`, reload,
