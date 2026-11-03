@@ -20,7 +20,7 @@ byte-capped cache; tools and resources see only the layer service.
 `@modelcontextprotocol/client` `^2.4.0`; ESLint `^10` with `typescript-eslint` `^8.72`; `tsx` for
 scripts.
 
-**Spec:** [A0-SERVER-SKELETON.md](./A0-SERVER-SKELETON.md). Read it first; this plan argues from
+**Spec:** [A0-SERVER-SKELETON.md](../specs/A0-SERVER-SKELETON.md). Read it first; this plan argues from
 it and cites it as "spec §n".
 
 **Where the work happens:** the `tlcmap-mcp` repository (`git@github.com:Systemik-Solutions/tlcmap-mcp.git`,

@@ -18,6 +18,7 @@ deliverable. Nothing in `skills/` exists yet.
 | [documents/DESIGN.md](documents/DESIGN.md) | The whole design — platform assessment, principles, the three layers, the build plan, risks, open questions |
 | [documents/USE-CASES.md](documents/USE-CASES.md) | The eight research use cases in full, with example prompts and worked examples from real TLCMap data |
 | [documents/specs/A0-SERVER-SKELETON.md](documents/specs/A0-SERVER-SKELETON.md) | Milestone A0 expanded into a buildable spec — the MCP server skeleton and its staging deployment |
+| [documents/plans/A0-SERVER-SKELETON-PLAN.md](documents/plans/A0-SERVER-SKELETON-PLAN.md) | The task-by-task implementation plan for A0 |
 | [documents/LARAVEL-UPGRADE.md](documents/LARAVEL-UPGRADE.md) | Upgrading the TLCMap application from Laravel 5.8 to 13, with a time estimate — deferred to a later phase; nothing here depends on it |
 
 Read DESIGN.md first. USE-CASES.md is the detail behind its §8.
@@ -56,7 +57,7 @@ Hunter Valley ([§9](documents/DESIGN.md#9-the-vertical-slice)).
 ## Repository layout
 
 ```
-documents/     the design documents (this is currently all there is)
+documents/     the design documents, with specs/ and plans/ per milestone
 skills/        the deliverable — one self-contained folder per skill  [not yet created]
 tests/         unit tests + the production compatibility check        [not yet created]
 evals/         gold sets, fixtures, ground-truth artefacts            [not yet created]
