@@ -592,8 +592,11 @@ absorb them:
 **A separate TypeScript service that speaks to TLCMap only through its public HTTP API.** It has
 no database connection and no access to the application's code.
 
-Built on the official MCP TypeScript SDK (`@modelcontextprotocol/sdk`, v1.32.2 on npm at
-2026-11-02, MIT, Node 18 or later), which is the protocol's reference implementation. Tool inputs
+Built on the official MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.4.0 with its Express
+adapter, on npm at 2026-11-03, Apache-2.0, Node 20 or later), which is the protocol's reference
+implementation. The v1 package, `@modelcontextprotocol/sdk`, is the maintenance line: it does not
+implement the 2026-07-28 MCP specification, and its support is guaranteed only for six months after
+v2's release on 2026-07-27. Tool inputs
 and outputs are declared once as typed schemas, and the JSON Schema each tool publishes is generated
 from them, so the tool surface is a contract the compiler checks rather than one kept by hand.
 
@@ -1128,7 +1131,7 @@ Run as two milestones, so the first is demonstrable before the second begins.
 transport, one tool calling the live API, a resource handle, the provenance envelope, a typed
 error, and read and write registered as separate scopes. Deployed to staging the way it will run in
 production (§13 Q2). It fixes the server's shape before the API work commits to a tool-shaped
-contract.
+contract. Specified in [specs/A0-SERVER-SKELETON.md](./specs/A0-SERVER-SKELETON.md).
 
 **A1 — discovery and rights.**
 *API:* ① ② ④ ⑦.
@@ -1301,7 +1304,9 @@ review bucket and the human gates are the product, not friction in it.
 2. **Where does `mcp.tlcmap.org` run, and who operates it?** The simplest form is a Node service
    under systemd on the application's server, behind Apache as a reverse proxy; a separate host
    isolates its load. Relevant because there is no rate limiting today and a public MCP endpoint
-   makes that pressing.
+   makes that pressing. Staging is settled — a Node service under systemd behind Apache at
+   `test-mcp.tlcmap.org` ([A0 spec §11](./specs/A0-SERVER-SKELETON.md#11-deployment)) — and
+   production is expected to take the same form.
 3. **Is the tool surface right at twelve?** Fewer and richer, or more and finer? Phase A gives
    evidence for six of them; the instinct to resist is one tool per endpoint.
 4. **Which second region tests generalisation?** The skill is region-parameterised from the start,
