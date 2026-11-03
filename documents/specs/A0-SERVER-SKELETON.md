@@ -158,6 +158,9 @@ enabled** for the 2026-07-28 protocol, so no stream stays open. 2025-era clients
 SDK's stateless fallback, which replies with a single-event SSE stream that ends with the result. The
 SDK's `createMcpHandler` builds a fresh server instance per request from a factory and serves both
 the 2026-07-28 protocol and stateless 2025-era clients; `toNodeHandler` mounts it on Express.
+The server advertises `tools.listChanged` and `resources.listChanged` as `false` — A0's tool list
+never changes — so a `subscriptions/listen` request is acknowledged and its stream closed rather
+than held open.
 `POST /mcp` handles MCP; `GET /mcp` and `DELETE /mcp` return `405`.
 
 **Host validation.** The SDK's Express app validates the `Host` header and by default admits only
@@ -300,7 +303,7 @@ Resource-read failures are MCP protocol errors carrying the same `{code, message
 | Code | Raised when | `details` |
 | --- | --- | --- |
 | `INVALID_ARGUMENT` | A resource URI whose `{id}` is not a canonical layer ID (§5). Tool input that fails its schema never reaches the handler: the SDK rejects it as an `isError` result whose text begins `Input validation error:` and names the field, without `structuredContent`. | The failing field and rule. |
-| `UPSTREAM_CONTRACT_VIOLATION` | A `2xx` response that is not JSON, does not have the shape in §4, or whose `metadata.layer_id` is not the requested layer; or any `3xx`. Redirects are never followed. | `status`, the `request`, what was expected, and the API's `metadata` object verbatim as `api_metadata` — for the current missing-layer response, that carries the `warnnig` text. |
+| `UPSTREAM_CONTRACT_VIOLATION` | A `2xx` response that is not JSON, does not have the shape in §4, or whose `metadata.layer_id` is not the requested layer; or any `3xx`. Redirects are never followed. | `status` and the `request`; for a `3xx`, `location`. For a `2xx` body, also what was expected and — when the body is JSON with an object `metadata` — that object verbatim as `api_metadata`; for the current missing-layer response, that carries the `warnnig` text. |
 | `LAYER_PRIVATE` | Upstream `403`. | `status`, `request`, the API's JSON body. |
 | `LAYER_NOT_FOUND` | Upstream `404`. | As above. |
 | `UPSTREAM_UNAVAILABLE` | Timeout, network failure, `429` or `5xx`. | `status` if any, `request`, elapsed time, and upstream `Retry-After` if sent. |
@@ -429,7 +432,8 @@ Staging is an Ubuntu 22.04 host running Apache, which also serves the staging TL
 **production** tlcmap.org.
 
 **Runtime.** Node 24 from the NodeSource apt repository, installed to `/usr/bin/node` and patched
-by `apt upgrade`. A system user `tlcmap-mcp`, with no login shell, runs the service.
+by `apt upgrade`. The host also serves the staging TLCMap application, so `DEPLOY.md` checks for an
+existing Node or `libnode` package first and stops for an agreed approach if one is installed. A system user `tlcmap-mcp`, with no login shell, runs the service.
 
 **Layout**
 
@@ -464,7 +468,8 @@ It keeps the three most recent releases. Rollback is the same switch, by hand.
   60 s upstream timeout.
 - TLS from `certbot --apache`.
 - `/mcp` is proxied with `flushpackets=on` and excluded from compression, so the single-event SSE
-  replies to 2025-era clients (§3) are never held back.
+  replies to 2025-era clients (§3) are never held back; `retry=0`, so a connection refused during a
+  restart does not keep the backend marked as failed.
 
 **`deploy/DEPLOY.md`** documents the one-time setup — the DNS A record, NodeSource, the user and
 directories, the unit, the vhost and modules, certbot, confirming port 3100 is free — then the
