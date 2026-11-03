@@ -8,8 +8,11 @@ any of it.
 
 ## Status
 
-**Design complete; implementation not started.** The documents below are the current
-deliverable. Nothing in `skills/` exists yet.
+**Design complete; milestone A0 done.** The MCP server skeleton,
+[tlcmap-mcp](https://github.com/Systemik-Solutions/tlcmap-mcp), runs on staging at
+`https://test-mcp.tlcmap.org` with one read-only tool, `tlcmap_get_layer`
+([acceptance record](https://github.com/Systemik-Solutions/tlcmap-mcp/blob/main/docs/acceptance/A0.md),
+2026-11-03). Nothing in `skills/` exists yet.
 
 ## Documents
 
@@ -82,6 +85,7 @@ pandoc documents/LARAVEL-UPGRADE.md -o documents/LARAVEL-UPGRADE.docx
 ## Related repositories
 
 - [GHAP](https://github.com/HughCraig/GHAP) — the main TLCMap application (Laravel); Layer 1 is built here
+- [tlcmap-mcp](https://github.com/Systemik-Solutions/tlcmap-mcp) — the MCP server (TypeScript); Layer 2 is built here
 - [TLCMap Views](https://github.com/HughCraig/TLCMapViews) — the visualisation layer
 - [TLCMap documentation](https://guide.tlcmap.org/) — including the [developer API reference](https://guide.tlcmap.org/developers/)
 
