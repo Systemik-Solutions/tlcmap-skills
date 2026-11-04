@@ -33,14 +33,14 @@ Three layers, built bottom-up, because each one is the foundation for the next:
 ```
 Layer 3  SKILLS        workflow, judgement, ethics     Markdown + Python   this repository
 Layer 2  MCP SERVER    discrete tools, no judgement    TypeScript          its own repository and service
-Layer 1  API           the contract                    PHP / Laravel       TLCMap application
+Layer 1  API v2        the contract                    PHP / Laravel       TLCMap application
 ```
 
-Only Layer 3 lives here. The API enhancements ([DESIGN.md §5](documents/DESIGN.md#5-layer-1--the-api))
-are changes to the TLCMap application itself. The MCP server
-([§6](documents/DESIGN.md#6-layer-2--the-mcp-server)) is a separate service that reaches TLCMap
-only through that API. Most of both are prerequisites for the skills — so the plan sequences them
-rather than working around them.
+Only Layer 3 lives here. The API work ([DESIGN.md §5](documents/DESIGN.md#5-layer-1--the-api))
+is a new version, v2, built in the TLCMap application beside the current API, which stays
+untouched. The MCP server ([§6](documents/DESIGN.md#6-layer-2--the-mcp-server)) is a separate
+service that reaches TLCMap only through v2. Most of both are prerequisites for the skills — so
+the plan sequences them rather than working around them.
 
 Seven skills are planned ([§7.3](documents/DESIGN.md#73-the-skills)):
 

@@ -1,6 +1,6 @@
 # TLCMap AI — design
 
-**Status:** design for build · **Date:** 2026-11-02
+**Status:** design for build · **Date:** 2026-11-04
 
 Companion documents: **[USE-CASES.md](./USE-CASES.md)** — the eight research use cases in full,
 with example prompts and worked examples from real TLCMap data; and
@@ -17,7 +17,7 @@ which this plan does not depend on.
 | [2. The platform today](#2-the-platform-today) | What the API offers, and what breaks |
 | [3. Design principles](#3-design-principles) | Eight rules the rest follows from |
 | [4. Architecture](#4-architecture) | Three layers, and why in this order |
-| [5. Layer 1 — the API](#5-layer-1--the-api) | The enhancement programme |
+| [5. Layer 1 — the API](#5-layer-1--the-api) | API v2, beside the frozen current API |
 | [6. Layer 2 — the MCP server](#6-layer-2--the-mcp-server) | Tool surface and design rules |
 | [7. Layer 3 — the skills](#7-layer-3--the-skills) | Workflow and judgement |
 | [8. Use cases](#8-use-cases) | Mapping to USE-CASES.md |
@@ -48,16 +48,19 @@ it returns, an MCP server that exposes it as discrete tools to any agent platfor
 skills that shape those tools into research workflows — so that a natural-language research
 request produces a citable, reproducible result.
 
-Each layer is useful on its own. The API work improves every existing TLCMap client, including
-the browser interface. The MCP server reaches Claude Desktop, a chatbot on tlcmap.org and any
-other agent framework, with no skills installed. The skills add judgement, ethics gating and
-finished outputs on top.
+Each layer is useful on its own. The API work is a new version, v2, open to every TLCMap client;
+the browser interface and TLCMap Views gain its fixes when they move to it, and nothing that uses
+the current API breaks in the meantime. The MCP server reaches Claude Desktop, a chatbot on
+tlcmap.org and any other agent framework, with no skills installed. The skills add judgement,
+ethics gating and finished outputs on top.
 
 ---
 
 ## 2. The platform today
 
 Grounded in the developer documentation and in live checks against production, 2026-09-25.
+Everything in this section describes the current API, which stays exactly as it is; the work goes
+into a new version beside it (§5.1).
 
 ### 2.1 What the API offers
 
@@ -104,9 +107,8 @@ So **layer discovery by region is impossible from the catalogue**, and there is 
 parameter on `/layers/json` to do it server-side either. That blocks
 [use case 3](./USE-CASES.md#3-regional-knowledge-synthesis-for-fieldwork) and half of
 [use case 4](./USE-CASES.md#4-indigenous--colonial-name-co-mapping). The fix is one
-`GROUP BY dataset_id` with `ST_Extent` exposed as a catalogue facet — **§5.1 ①**, the highest
-value change in the programme, which fixes the same gap in the browser interface at the same
-time.
+`GROUP BY dataset_id` with `ST_Extent` exposed as a catalogue facet — **§5.2 ①**, the highest
+value change in the programme, which the browser interface gains too when it moves to v2.
 
 ::: warning
 **Compute the extents; do not promote the declared fields.** The four that exist cannot be
@@ -118,8 +120,8 @@ the contributor-supplied values as a separate hint, and derive the facet from ge
 ### 2.3 Behaviours that break a naive client
 
 Every one of these is a silent failure — wrong data, not an error. This table is the evidence
-base for §5: each row is something the API should stop doing, not something a client should
-learn to survive (§3.8).
+base for §5: each row is something v2 does not do, not something a client should learn to
+survive (§3.8). The current API keeps doing all of them, unchanged (§5.1).
 
 | Trap | Consequence |
 | --- | --- |
@@ -129,7 +131,7 @@ learn to survive (§3.8).
 | >5,000 matches → `302` to `/maxpaging` (HTML) | A client following redirects gets HTML with a `200` where it expected GeoJSON. `paging=1` does not help — the ceiling is checked against the total. |
 | Private or missing layer → `200` with a FeatureCollection whose `features` is empty | Looks like an empty public layer, except that `metadata` carries only a message and no `layer_id`; the warning key is misspelled `warnnig` here. Checked 2026-11-03. |
 | Unparseable `extended_data` expression is **discarded silently** | See below. The most dangerous behaviour in the API. |
-| Search output sets `udateend = udatestart` | Every record looks like a single instant on a timeline. Layer feeds are correct. |
+| Search output sets `udateend = udatestart` | Every record looks like a single instant on a timeline. Layer feeds are correct. A defect, not a design: the end value is computed and then never used (source, 2026-11-04). |
 | `name` matches `title` only, never `placename` | The parameter people reach for first is the one that misses. |
 | Extended data is merged into `properties` | A contributor's column named `description` silently replaces the built-in one. |
 | Import sanitises field headings | `Catalogue no. 3` → `Catalogue no ` (trailing space significant); `Area m2` → `Area m`. |
@@ -205,9 +207,9 @@ and the system says so rather than defaulting to open.
 
 ### 3.4 Report what was excluded
 
-The API reports its own failures honestly once §5.1 ② lands — a rejected filter is a `400`, a
-private layer a `403`, an oversized result a `413` — so clients check status codes rather than
-sniffing content types. That is the whole of error handling.
+v2 reports its own failures honestly (§5.2 ②) — a rejected filter is a `400`, a private layer a
+`403`, an oversized request a `413` — so clients check status codes rather than sniffing content
+types. That is the whole of error handling.
 
 What remains is not error handling but honesty about scope, and it stays:
 
@@ -241,14 +243,15 @@ visibly not the source of the statistics.
 ### 3.8 Fix it upstream
 
 TLCMap owns the API and this capability both, and there is exactly **one deployment** —
-tlcmap.org. So where the agent layers need something the API does not do, the API changes.
+tlcmap.org. So where the agent layers need something the API does not do, the API changes — in
+v2, which leaves every existing client of the current API untouched (§5.1).
 
 This design contains **no workarounds, no fallbacks and no feature detection**. A client-side
 workaround would be code written, tested, documented and maintained indefinitely, to defend
 against behaviour we control, on behalf of an installed base of one — while every other TLCMap
 client keeps hitting the same wall. Layer discovery by region is the clearest case: either a
 2,118-request harvest plus a recursive bbox-subdivision algorithm in every client, or one
-`GROUP BY dataset_id` on the server that fixes the browser interface at the same time.
+`GROUP BY dataset_id` on the server that every client can use.
 
 §5 is accordingly a list of **prerequisites**, not of gaps to route around. Each item names what
 depends on it and the phase it is needed by. The upper layers are written against the API as it
@@ -273,8 +276,8 @@ disambiguation and ethics do not become endpoints.
 │           TypeScript, own service.  Opens TLCMap to any     │
 │           agent.  Speaks to TLCMap only through the API.    │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 1  API               the contract. One deployment.   │
-│           PHP/Laravel.  Fixes help every client.            │
+│  Layer 1  API v2            the contract. One deployment.   │
+│           PHP/Laravel.  Beside the frozen current API.      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -283,16 +286,19 @@ disambiguation and ethics do not become endpoints.
 | **Owns** | Data, query semantics, correctness | Tool surface, agent ergonomics | Workflow, judgement, output |
 | **Makes model calls** | No | **No** | Yes |
 | **Knows about agents** | No | Tool shapes only | Entirely |
-| **Structurally reversible?** | **Hardest — unknown clients, no negotiation** | Easy — tools are re-read each session | Easy — rewrite freely |
+| **Structurally reversible?** | **Easy while v2 is unstable; hardest once it is stable** — unknown clients, no negotiation | Easy — tools are re-read each session | Easy — rewrite freely |
 | **Semantically reversible?** | Hard | **Hardest — changes are invisible** | Easy |
 | **Built in** | PHP / Laravel | TypeScript | Markdown + Python |
 
 The two reversibility rows say different things.
 
-**Structurally, the API is hardest to change.** It has real clients today — scripts, QGIS users,
-embeds — none of which re-read anything or adapt. MCP is the opposite: the protocol is
-self-describing and the tool list is fetched per session, so a renamed tool or a new parameter is
-visible and a capable agent adapts without anyone shipping a fix.
+**Structurally, a published API is hardest to change.** The current one has real clients — TLCMap
+Views, the browser interface, scripts, QGIS users, embeds — none of which re-read anything or
+adapt. That is why it is frozen and the work goes into v2 (§5.1): until v2 is declared stable its
+only clients are this design's own, and after that it is as hard to change as the current API is
+now. MCP is the opposite: the protocol is self-describing and the tool list is fetched per session,
+so a renamed tool or a new parameter is visible and a capable agent adapts without anyone shipping
+a fix.
 
 **Semantically, MCP is hardest**, and this is the row to act on. An agent remediates *errors*; it
 does not remediate *meanings that changed quietly*. If `date_from` begins excluding undated
@@ -327,7 +333,7 @@ three layers, first.
 
 Three artefacts, in three places.
 
-**The API** lives in the TLCMap application.
+**The API** — v2, beside the frozen current API — lives in the TLCMap application.
 
 **The MCP server** lives in its own repository and deploys as its own service. It is a client of
 the API, so it ships on its own schedule and never changes the application's runtime.
@@ -423,108 +429,166 @@ format does.
 stack, and a client with no skills support still gets full tool access through the server. That is
 the other reason Layer 2 comes before Layer 3 (§4.2): its portability is not in question.
 
-**Versioning against an unversioned API.** The API is not versioned (§2.4) and the upper layers
-depend on documented behaviours, so `tests/` includes a compatibility check run against production
-that fails loudly when one of them changes. When the `udateend` bug is fixed, we find out from a
-red test rather than from a wrong timeline.
+**Building against an unstable API.** v2 may change shape until it is declared stable (§5.1), and
+the upper layers depend on its documented behaviour, so `tests/` includes a compatibility check run
+against production that fails loudly when any of it changes. A v2 change reaches the server and the
+skills as a red test rather than as a wrong answer.
 
 ---
 
 ## 5. Layer 1 — the API
 
-Ordered by what depends on each item. §11's compatibility suite asserts every one of these
-against production once it lands.
+Layer 1 is a new, versioned API, **v2**, built beside the current one in the TLCMap application.
+The current API stays exactly as it is (§5.1). The items below are what v2 provides, ordered by
+what depends on each: the current behaviour is the evidence (§2.3), and v2's behaviour is the
+requirement. §11's compatibility suite asserts every one of these against production once it
+lands.
 
-### 5.1 Tier 1 — required first
+### 5.1 Two versions
 
-**① Layer extent and facets on the catalogue.**
+**The current API is frozen.** Its endpoints — `/places`, `/api`, `/layers/…`, `/multilayers/…` —
+keep their paths, parameters, response shapes, status codes and defects. TLCMap Views, the browser
+interface, QGIS users, embeds and scripts depend on that behaviour, some of the §2.3 traps among
+it, and nothing in this plan changes it. This document calls it v1.
+
+**v2 lives under `/api/v2/`**, and every item in this section is delivered there. The MCP server
+and the skills use v2 only.
+
+- **A public API, not the server's private one.** v2 is documented in the TLCMap developer
+  documentation and open to any client. The tool surface maps onto it (§6.2 rule 3), so a question
+  has the same answer whichever way it is asked.
+- **Built as the phases need it.** Each phase adds the v2 endpoints its tools require (§10). v2 is
+  not a rebuild of v1's whole surface.
+- **Its own code.** v2 has its own controllers, query building and serialisation over the
+  application's models and database. v1's code is neither modified nor refactored to share with
+  it, so no v2 change can alter a v1 response.
+- **JSON only, with honest status codes from the first endpoint** (②). A v2 response is never a
+  redirect.
+- **Unstable until the design is delivered.** v2 may change shape until Phase E is complete. Until
+  then its only clients are the server and the skills, and the production compatibility check
+  (§4.3) turns each change into a red test. At the end of Phase E it is declared stable, and from
+  then on a change of meaning is a new version, never a redefinition (§6.5).
+- **Rate limits and tokens apply to v2 only** (⑱, §5.4). v1 keeps its current behaviour.
+
+Some of the work sits below both versions. ①'s computed extents are refreshed when a layer
+changes, and ⑯ changes what the importer stores. Both alter the application, not v1's interface.
+
+**v1 and v2 can answer the same question differently.** A dated search on v1 drops undated
+records; on v2 it does not (⑦). Each result's provenance records the request that produced it, so
+the version is always on record, and the v2 documentation lists the differences. Deprecating v1,
+and moving TLCMap Views, the browser interface and external integrations to v2, is outside this
+plan (§13).
+
+### 5.2 Tier 1 — required by A1
+
+**① Layer catalogue with computed extent and facets.**
 
 ```
-GET /layers/json?bbox=&datefrom=&dateto=&q=&recordtype=&page=&per_page=
+GET /api/v2/layers?q=&bbox=&polygon=&datefrom=&dateto=&include_undated=&recordtype=
+                  &creator=&has_license=&has_warning=&min_records=&page=&per_page=
 ```
 
-with computed `bbox`, `date_range` and `record_count` on every entry — one PostGIS query
-(`ST_Extent` and min/max over dates, grouped by `dataset_id`), refreshed on layer change.
-**Computed, not declared**: the contributor-filled fields are populated on 4 of 2,118 layers and
-two of those four are malformed (§2.2), so they stay a separate hint.
+with `total` in every response, and computed `bbox`, `date_range` and `record_count` on every
+entry — one PostGIS query (`ST_Extent` and min/max over dates, grouped by `dataset_id`), refreshed
+on layer change. Every filter `tlcmap_list_layers` takes is a parameter here, because the
+alternative — fetching the whole catalogue and filtering it in the server — is §2.4's gap moved up
+a layer. `has_license` and `has_warning` test whether the field is present, never what it says
+(§3.3). **Computed, not declared**: the contributor-filled fields are populated on 4 of 2,118
+layers and two of those four are malformed (§2.2), so they stay a separate hint.
 
-> **Required by:** `tlcmap_list_layers`, and therefore all regional discovery. Fixes the same gap
-> in the browser interface. **The highest-value change in the programme.** Needed by Phase A.
+> **Required by:** `tlcmap_list_layers`, and therefore all regional discovery. The browser
+> interface gains the same discovery when it moves to v2. **The highest-value change in the
+> programme.** Needed by A1.
 
 **② Honest errors instead of HTML redirects.**
 
-| Situation | Now | Should be |
+| Situation | v1 | v2 |
 | --- | --- | --- |
-| Over the 5,000 ceiling | `302` → `/maxpaging` HTML | `413` + JSON `{error, total, suggestions}` |
+| Request too large to answer at once | `302` → `/maxpaging` HTML, over 5,000 matches | `413` + JSON `{error, total, suggestions}` — though v2 pages any number of matches (③), so this applies per request, not per result |
 | Layer private | `200`, empty `features`, key `warnnig` | `403` + JSON |
 | Layer missing | `200`, empty `features` | `404` + JSON |
 | Unparseable `extended_data` | `200`, filter silently dropped | `400` + JSON naming the expression |
 | Missing analysis parameter | `500` | `400` + JSON naming the parameter |
-| Bad `format` on `/api` | `302` → home page | `400` + JSON |
-| `id=` on `/places` | `302` → the path form | Serve it directly |
+| Bad `format` on `/api` | `302` → home page | `400` + JSON naming the parameter |
+| `id=` on `/places` | `302` → the path form | No redirects: every resource has one URL |
 
 > **Required by:** every tool, because it is the difference between a server that reads a status
 > code and one that guesses from content types — guesswork that would otherwise be baked into the
-> layer whose mistakes are quietest. Needed by Phase A.
+> layer whose mistakes are quietest. Needed by A1.
 
-**③ Extend `/api` to contributed layers.** `/api` pages properly through any number of matches
-and reports `total`, but serves the two gazetteers only. Contributed layers — the research data —
-are reachable only through `/places`, the endpoint with the ceiling.
+**③ Paging across every source.** v1's `/api` pages properly through any number of matches and
+reports `total`, but serves the two gazetteers only. Contributed layers — the research data — are
+reachable only through `/places`, the endpoint with the ceiling. v2's place search pages through
+any number of matches from every source, with `total` and a stable cursor, and has no ceiling.
 
-> **Required by:** any question spanning contributed layers at scale, which is most of them. It is
-> what makes arbitrary regions tractable without a client ever subdividing a bounding box.
-> Probably the best value-to-effort ratio on the list, since the paging machinery already exists.
-> Needed by Phase B.
+> **Required by:** `cursor` on `tlcmap_search_places`, and so any question whose answer exceeds one
+> page — which is what makes the tools work beyond the slice's one region, without a client ever
+> subdividing a bounding box. Needed by A1.
 
-**④ A cheap count.** `count_only=true` returning `{total}` without building features, or `total`
-in `/places` output the way `/api` already has it. Today a client cannot ask how big a result set
-is without running the query, and running it is exactly what fails when it is large.
+**④ A cheap summary.** Every v2 search response carries a summary of the whole match set, not of
+the page: `total`, computed `extent`, `date_range`, `undated_count`, and counts by source and by
+layer, all computed in SQL. `summary_only=true` returns it without building any features. In v1 a
+client cannot ask how big a result set is without running the query, and running it is exactly
+what fails when it is large.
 
-> **Required by:** any workflow that must decide whether a query is tractable before spending it.
-> Needed by Phase A.
+> **Required by:** the summary fields of `tlcmap_search_places`, and any workflow that must decide
+> whether a query is tractable before spending it. Computing the summary in the server would mean
+> fetching every page of a result in order to describe it. Needed by A1.
 
-### 5.2 Tier 2 — data correctness
+**⑤ Namespace extended data in GeoJSON.** v2 returns it under `properties.extended_data{}` rather
+than merged into `properties`, where in v1 a contributor's column named `description` or `source`
+silently overwrites the built-in field and nothing says which is which. Because this is a response
+shape, it is in v2 from the first endpoint that returns features; adding it later would be a
+breaking change to v2 itself. *A1.*
 
-**⑤ Namespace extended data in GeoJSON.** Return it under `properties.extended_data{}` rather
-than merged into `properties`, where a contributor's column named `description` or `source`
-silently overwrites the built-in field and nothing says which is which. Changes an existing
-response shape, so it needs a transition. *Phase B.*
+**⑥ A correct `udateend`.** v1's search output computes it from the start date — the end value is
+computed and never used — so every record reports `udateend == udatestart`, and a record with an
+end date but no start date gets an end derived from an empty string (source, 2026-11-04). Layer
+feeds compute it correctly, and every timeline TLCMap links to is built from a layer or multilayer
+feed. v2 computes `udateend` from `dateend` everywhere. Required by `date_range` on
+`tlcmap_search_places`. *A1.*
 
-**⑥ Fix `udateend` in search output.** It is computed from the start date, so every record
-reports `udateend == udatestart` and every timeline built from a search shows instants. *Phase B.*
+**⑦ Never silently discard records.** In v1, `sort` and `line=time` drop every record with no start
+or end date, and date filters exclude undated records. v2 takes `nulls` (`first`\|`last`) on every
+sort and `include_undated` on every date filter, and drops no record without a parameter saying
+so. A brief for "the Hunter Valley, 1820–1860" otherwise loses every undated record, and most
+gazetteer records are undated. *A1.*
 
-**⑦ Stop `sort` and date filters silently discarding records.** Add `nulls=last` to `sort`, and
-`include_undated=true` to date filtering. A brief for "the Hunter Valley, 1820–1860" otherwise
-loses every undated record, and most gazetteer records are undated. *Phase A.*
+**⑧ A deterministic `limit`; `sample` for sampling.** v1's `limit=N` shuffles and then takes N. In
+v2, `limit=N` takes the first N in a stable order, and random sampling, where it is wanted, is
+`sample=N`. Both uses are legitimate; one parameter should not silently mean the surprising one.
+Required by `limit` on `tlcmap_search_places`. *A1.*
 
-**⑧ Make `limit` deterministic; add `sample`.** `limit=N` should take the first N; the existing
-shuffle-then-take behaviour moves to `sample=N`. Both uses are legitimate; one parameter should
-not silently mean the surprising one. *Non-blocking.*
+### 5.3 Tier 2 — later phases
 
-**⑨ Return the match score on `fuzzyname`.** The trigram similarity is computed to rank results
+**⑨ Return the match score on fuzzy matching.** The trigram similarity is computed to rank results
 and then discarded. Exposing it, with a threshold, gives the resolver a server-computed signal it
 cannot obtain at any price — **the one item on this list that cannot be worked around
 client-side at all.** *Phase B, ahead of Phase D.*
 
-### 5.3 Tier 3
-
-**⑩ Bulk fetch by ID.** `ids=a1353c,n77b93,…`. Today `id=` takes one and comma-separated values
+**⑩ Bulk fetch by ID.** `ids=a1353c,n77b93,…`. v1's `id=` takes one, and comma-separated values
 redirect to a nonsense path, so a resolver makes one request per candidate. *Phase B.*
 
 **⑪ Controlled vocabulary endpoints.** `state`, `lga`, `feature_term` and `parish` are **exact**
 matches against the gazetteer's vocabulary — `lga=CESSNOCK` works, `lga=Cessnock Council` does
-not — and nothing exposes the valid values. *Phase A (region-scoped), extended in Phase B.*
+not — and nothing exposes the valid values. v2 returns each field's values with a `record_count`
+per value, optionally within a `bbox`. *A2 (region-scoped), extended in Phase B.*
 
-**⑫ Statistics as JSON.** `basicstatistics/json` returns geometry only while the numbers — count,
-area, density, date range, median, mean — are computed for the HTML page and thrown away.
-Advanced statistics has no JSON endpoint at all. *Phase A.*
+**⑫ Statistics as JSON, per layer.** v1's `basicstatistics/json` returns geometry only, while the
+numbers — count, area, density, date range, median, mean — are computed for the HTML page and
+thrown away, and advanced statistics has no JSON endpoint at all. v2 returns them as numbers.
+Statistics over a region spanning several layers are not an endpoint: `tlcmap-analyse` computes
+them over the deduplicated records it holds, because deduplication changes the counts and only the
+skill knows what it removed (§7.3). *A2.*
 
-**⑬ DBScan distance in real units.** Accept metres against geography rather than
-degrees-divided-by-100, whose meaning changes with latitude. *Non-blocking.*
+**⑬ DBScan distance in real units.** Metres against geography rather than v1's
+degrees-divided-by-100, whose meaning changes with latitude. *Phase C, with
+`tlcmap_cluster_layer`.*
 
-**⑭ Conditional requests and a change feed.** `ETag` / `Last-Modified` on feeds, and
-`updated_since` on layers and the catalogue. Without it a scheduled pipeline refetches and diffs
-everything on every run. *Phase E.*
+**⑭ Conditional requests and a change feed.** `ETag` / `Last-Modified` on feeds, so the server's
+cache revalidates rather than refetching when an entry expires (§6.4) — *Phase C*. And
+`updated_since` on layers and the catalogue, without which a scheduled pipeline refetches and diffs
+everything on every run — *Phase E*.
 
 **⑮ A structured licence identifier** alongside the free-text field. The free text stays and is
 still what gets displayed; the identifier lets a client *assist* a republication decision without
@@ -532,32 +596,46 @@ ever making it (§3.3). *Non-blocking.*
 
 **⑯ Import fixes.** Stop stripping digits from field headings (`Area m2` → `Area m`). Report every
 date error rather than aborting on the first. Expose the validator as
-`POST /layers/{id}/validate` for dry runs. *Phase D.*
+`POST /api/v2/layers/{id}/validate` for dry runs. The importer is shared by both versions, so the
+first two change what new layers store rather than either API's interface. *Phase D.*
 
-**⑰ Small defects.** `warnnig` → `warning`; the RO-Crate metadata declaring `TLCMLayer_{id}.json`
-while shipping `tlcmap_output.json`; `chunks` returning `500`. *Non-blocking.*
+**⑰ Small defects, not carried into v2.** v1 keeps `warnnig` for `warning`, RO-Crate metadata
+declaring `TLCMLayer_{id}.json` while shipping `tlcmap_output.json`, and `chunks` returning `500`.
+v2's equivalents are correct from the start. *With each v2 endpoint.*
 
-**⑱ Published rate limits.** More pressing once a public MCP endpoint exists. *Phase C.*
+**⑱ Published rate limits on v2.** The MCP server is one client carrying every agent's traffic
+(§6.1), so v2 gives it a quota of its own, granted on a credential or an address rather than on a
+`User-Agent`, which any client can claim. The limits are set deliberately rather than inherited:
+Laravel's `api` route group applies `throttle:60,1` — sixty requests a minute per address — by
+default (source, 2026-11-04), which the server would exceed at once. *Phase C,* before the server
+is public.
 
 ### 5.4 The write API
 
-Needed for use cases 1, 3 and 7, and the precondition for authenticated MCP tools.
+Needed for use cases 1, 3 and 7, and the precondition for authenticated MCP tools. Part of v2.
 
 ```
-POST   /api/v1/layers                          create, with metadata
-PATCH  /api/v1/layers/{id}                     update metadata
-POST   /api/v1/layers/{id}/records             bulk append (CSV or GeoJSON body)
-POST   /api/v1/layers/{id}/records:upsert      upsert on a client-supplied external key
-PUT    /api/v1/layers/{id}/records/{ghap_id}   update one record
-DELETE /api/v1/layers/{id}/records/{ghap_id}
-POST   /api/v1/layers/{id}/validate            dry run — the same report, server-side
-POST   /api/v1/multilayers                     compose
+POST   /api/v2/layers                          create, with metadata
+PATCH  /api/v2/layers/{id}                     update metadata
+POST   /api/v2/layers/{id}/records             bulk append (CSV or GeoJSON body)
+POST   /api/v2/layers/{id}/records:upsert      upsert on a client-supplied external key
+PUT    /api/v2/layers/{id}/records/{ghap_id}   update one record
+DELETE /api/v2/layers/{id}/records/{ghap_id}
+POST   /api/v2/layers/{id}/validate            dry run — the same report, server-side
+POST   /api/v2/multilayers                     compose
 ```
 
 What matters more than the routes:
 
-- **Scoped personal access tokens** (`layer:read`, `layer:write`), revocable, not the session
-  cookie.
+- **OAuth 2.1, with TLCMap as the authorisation server.** An MCP server is an OAuth resource
+  server: it must validate that a token was issued for it as the audience, and must not accept or
+  pass on any other token (MCP authorisation specification, checked 2026-11-04). So TLCMap issues
+  tokens whose audience is `mcp.tlcmap.org`, publishes its authorisation-server metadata, and
+  supports the client registration the specification expects. The server never forwards a
+  caller's token to v2. It calls v2 with a credential of its own, exchanged for the caller's
+  identity (OAuth token exchange), so v2 still decides what that caller may do.
+- **Scoped, revocable tokens** (`layer:read`, `layer:write`), never the session cookie — for that
+  exchange, and for scripts calling v2 directly.
 - **Idempotency** via an `Idempotency-Key` header and upsert on a client-supplied key. Without
   these, a scheduled pipeline that fails halfway and retries duplicates the whole layer. The
   single most important requirement here.
@@ -589,8 +667,8 @@ absorb them:
 
 ### 6.1 Architecture
 
-**A separate TypeScript service that speaks to TLCMap only through its public HTTP API.** It has
-no database connection and no access to the application's code.
+**A separate TypeScript service that speaks to TLCMap only through its public HTTP API, v2
+(§5.1).** It has no database connection and no access to the application's code.
 
 Built on the official MCP TypeScript SDK v2 (`@modelcontextprotocol/server` 2.4.0 with its Express
 adapter, on npm at 2026-11-03, Apache-2.0, Node 20 or later), which is the protocol's reference
@@ -610,7 +688,7 @@ from them, so the tool surface is a contract the compiler checks rather than one
   │   ├─ resource handles        │   bulk data by reference
   │   └─ provenance envelope     │
   └────────────┬─────────────────┘
-               │  HTTPS — the public API (§5)
+               │  HTTPS — API v2 (§5)
                ▼
   ┌──────────────────────────────┐
   │  tlcmap.org                  │   Laravel application
@@ -629,8 +707,9 @@ Served over HTTP rather than stdio, because the point is reach: a remote endpoin
 install, which keeps the skills' setup to one line of configuration.
 
 To the API, the server is a single client carrying every agent's traffic. It therefore applies its
-own per-caller limits and caching rather than relying on the API's (⑱), and identifies itself in
-its `User-Agent` so TLCMap can tell its load apart.
+own per-caller limits and caching, and identifies itself in its `User-Agent` so TLCMap can tell its
+load apart. v2's own rate limits give the server a quota of its own, granted on something a client
+cannot simply claim (⑱).
 
 The server shares no code with the skills' Python, and does not need to. Both are clients of §5 —
 one contract, two transports.
@@ -652,7 +731,7 @@ one contract, two transports.
 4. **Every result carries provenance** — the equivalent query, the fetch time, the record UIDs.
    An MCP-driven answer must be as retraceable as a skill-driven one.
 5. **Errors are typed and actionable.** `RESULT_TOO_LARGE` carries the total and a suggestion;
-   `FILTER_REJECTED` names the expression it could not parse. This is §5.1 ② surfacing at the tool
+   `FILTER_REJECTED` names the expression it could not parse. This is §5.2 ② surfacing at the tool
    layer.
 6. **Read and write are separate scopes from day one**, so the public read-only deployment and an
    authenticated one are the same server configured differently.
@@ -672,8 +751,9 @@ Faceted catalogue search. The tool regional discovery is impossible without.
 | **Out** | `{total, returned, layers[{layer_id, name, description, creator, record_count, bbox, date_range, has_warning, license_present}], cursor, provenance}` |
 | **Errors** | `INVALID_GEOMETRY`, `RESULT_TOO_LARGE` |
 
-`bbox` matches the **computed** extent (§5.1 ①), never the contributor-declared fields. Returns
-layer summaries only; records come from `tlcmap_get_layer`. `has_license` and `has_warning` report
+Every input is a v2 catalogue parameter (§5.2 ①), so the server filters nothing itself. `bbox`
+matches the **computed** extent, never the contributor-declared fields. Returns layer summaries
+only; records come from `tlcmap_get_layer`. `has_license` and `has_warning` report
 presence, **not** an interpretation of content — they let an agent find a region's no-licence
 layers without the server ever deciding what a licence permits.
 
@@ -683,15 +763,19 @@ Search places across all four sources.
 
 | | |
 | --- | --- |
-| **In** | `name_query`, `match` (`exact`\|`contains`\|`fuzzy`), `sources[]`, `bbox`, `polygon`, `date_from`, `date_to`, `include_undated`, `state`, `lga`, `feature_term`, `record_type`, `layer_ids[]`, `extended_data[]`, `count_only`, `limit`, `cursor` |
+| **In** | `name_query`, `match` (`exact`\|`contains`\|`fuzzy`), `sources[]`, `bbox`, `polygon`, `date_from`, `date_to`, `include_undated`, `state`, `lga`, `feature_term`, `record_type`, `layer_ids[]`, `extended_data[]`, `summary_only`, `limit`, `cursor` |
 | **Out** | `{total, returned, extent, date_range, sources_breakdown, layers_present[], places[], resource_uri, provenance}` |
 | **Errors** | `RESULT_TOO_LARGE` (with `total` + narrowing suggestions), `FILTER_REJECTED`, `INVALID_GEOMETRY` |
 
 `match` replaces the `name`/`containsname`/`fuzzyname` trap — one parameter with three honest
 values rather than three parameters with precedence rules. `include_undated` is explicit rather
-than a silent exclusion. `count_only` (§5.1 ④) answers "how big is this?" without building
-features. There is **no `limit`-as-random-sample**. `layers_present` gives the distinct layers
-contributing to a result, so an agent can go straight to their rights without paging every record.
+than a silent exclusion. `total`, `extent`, `date_range`, `sources_breakdown` and `layers_present`
+describe the whole match set, not the page, and come from v2's summary (§5.2 ④); `summary_only`
+answers "how big is this?" without building features. `date_range` depends on a correct `udateend`
+(⑥). `limit` takes the first N in a stable order (⑧) — there is **no `limit`-as-random-sample** —
+and `cursor` pages through v2 (③), so a result of any size is reachable. `layers_present` gives the
+distinct layers contributing to a result, so an agent can go straight to their rights without
+paging every record.
 
 #### `tlcmap_get_layer`
 
@@ -699,13 +783,14 @@ A layer's records and metadata.
 
 | | |
 | --- | --- |
-| **In** | `layer_id`, `sort`, `nulls` (`first`\|`last`), `line` (`none`\|`route`\|`time`), `bbox` |
+| **In** | `layer_id`, `sort`, `nulls` (`first`\|`last`), `line` (`none`\|`route`\|`time`) |
 | **Out** | `{metadata, record_count, extent, date_range, undated_count, resource_uri, provenance}` |
 | **Errors** | `LAYER_PRIVATE` (403), `LAYER_NOT_FOUND` (404) |
 
 Summary plus a resource handle; never inline features. `nulls=last` (§5.2 ⑦) stops sorting from
 silently deleting undated records. `undated_count` is explicit so the exclusion can be reported
-rather than discovered.
+rather than discovered. A layer's records within a region are a `tlcmap_search_places` query with
+`layer_ids[]` and `bbox`, so this tool takes no geometry filter.
 
 #### `tlcmap_get_layer_metadata`
 
@@ -744,11 +829,12 @@ The numbers, as numbers.
 
 | | |
 | --- | --- |
-| **In** | `layer_id`, or `bbox` + `layer_ids[]` for a region |
+| **In** | `layer_id` |
 | **Out** | `{count, extent, centroid, convex_hull, area_km2, density_per_km2, date_range, median_date, mean_date, undated_count, feature_term_breakdown, provenance}` |
-| **Errors** | `LAYER_PRIVATE`, `INSUFFICIENT_RECORDS` |
+| **Errors** | `LAYER_PRIVATE`, `LAYER_NOT_FOUND`, `INSUFFICIENT_RECORDS` |
 
-Requires §5.3 ⑫.
+Requires §5.3 ⑫. Per layer only: statistics for a region are computed by `tlcmap-analyse` over the
+deduplicated records it holds (§7.3), not by the server stitching layers together.
 
 ---
 
@@ -756,7 +842,7 @@ The remaining six:
 
 **`tlcmap_resolve_candidates`** — given a placename and what is known around it, return ranked
 candidates **with evidence**: `match_score` (the trigram similarity the database already computes,
-§5.2 ⑨), `matched_on` naming which field matched, and `distance_from_prior_km` turning a spatial
+§5.3 ⑨), `matched_on` naming which field matched, and `distance_from_prior_km` turning a spatial
 prior into a number the model can weigh rather than a filter that silently excludes. It returns
 candidates and never a decision. The most important tool outside the slice.
 
@@ -788,7 +874,8 @@ Bulk payloads are MCP resources with stable URIs, not tool results:
 
 The server keeps no database, so it holds resource payloads in its own cache for a fixed period.
 A resource expires rather than being silently rebuilt: a client holding an expired URI calls the
-tool again. Retraceability does not depend on the cache, because each result's provenance already
+tool again. With conditional requests (§5.3 ⑭) the cache revalidates an entry rather than
+refetching it. Retraceability does not depend on the cache, because each result's provenance already
 records the API request that produced it (§6.2 rule 4). Every payload carries a content hash, so a
 provenance record cites a specific state of the data and a rerun shows whether it has changed.
 
@@ -807,8 +894,10 @@ tempting the continuity looks.
 **Additive changes are free; semantic changes are not.** New tools, new optional parameters and
 new output fields cost nothing, because an agent that has not heard of them does not use them.
 
-**Version the surface, not the API.** The API stays unversioned (§2.4); the MCP server declares a
-version and can keep a deprecated tool alive through a transition.
+**Version both, independently.** v2 is itself a version of the API (§5.1), and changes shape
+freely only until it is declared stable. The MCP server declares its own version and can keep a
+deprecated tool alive through a transition. A v2 change the server absorbs without changing what a
+tool means needs no new tool.
 
 **Remember what does not re-read.** The self-describing argument covers agents in a session, not
 the artefacts built around the tools: SKILL.md files naming tools, a site chatbot's fixed prompt,
@@ -891,8 +980,9 @@ context that distinguishes a river from a surname.
 
 **`tlcmap-analyse`** — spatial and temporal distribution. Chooses which analysis answers the
 question, calls `tlcmap_layer_statistics` and `tlcmap_cluster_layer`, computes locally what the
-API does not expose, and drafts prose strictly from the computed numbers with the exclusion counts
-stated. Emits the notebook that reproduces the figures.
+API does not expose — including every statistic over a region's combined, deduplicated records,
+which no endpoint can know — and drafts prose strictly from the computed numbers with the
+exclusion counts stated. Emits the notebook that reproduces the figures.
 
 **`tlcmap-visualise`** — maps, timelines, charts and embeds. Two routes: TLCMap Views URLs via
 `tlcmap_build_view_url`, matching view to data; and local artefacts — Leaflet or kepler.gl HTML,
@@ -946,7 +1036,7 @@ Full descriptions — example prompts, the researcher, the pipeline step by step
 | --- | --- | --- | --- | --- |
 | [1](./USE-CASES.md#1-historical-text--mapped-corpus) | Historical text → mapped corpus | geoparse → resolve → visualise → prepare | ②③⑨⑩⑪ | D |
 | [2](./USE-CASES.md#2-place-based-corpus-enrichment) | Place-based corpus enrichment | resolve → cite | ⑨⑩⑪ | D |
-| [3](./USE-CASES.md#3-regional-knowledge-synthesis-for-fieldwork) | Regional fieldwork brief | search → analyse → visualise → cite | ①②④⑦⑫ | **A** |
+| [3](./USE-CASES.md#3-regional-knowledge-synthesis-for-fieldwork) | Regional fieldwork brief | search → analyse → visualise → cite | ①–⑧ ⑪ ⑫ | **A** |
 | [4](./USE-CASES.md#4-indigenous--colonial-name-co-mapping) | Indigenous / colonial co-mapping | search → cite → visualise | ⑮ (to *assist* only) | any — **human-gated** |
 | [5](./USE-CASES.md#5-toponym-pattern-analysis) | Toponym pattern analysis | search (harvest) → analyse → visualise | ③ | B |
 | [6](./USE-CASES.md#6-environmental--event-history-overlay) | Environmental / event history overlay | geoparse → resolve → analyse → visualise | ⑥⑦ | B or D |
@@ -986,7 +1076,7 @@ Three things make it the right slice:
 
 1. **It does something researchers cannot do at all today.** Not "does it faster" — cannot do.
    Regional discovery is impossible from the catalogue (§2.2).
-2. **It exercises the largest API change end to end.** §5.1 ① is the item everything else depends
+2. **It exercises the largest API change end to end.** §5.2 ① is the item everything else depends
    on for discovery and the biggest single piece of platform work. Proving it in a real workflow
    first is a better use of a slice than proving four small fixes.
 3. **It puts the rights machinery under real load** (§9.3), which is the part of this design that
@@ -998,10 +1088,10 @@ takes a region as a parameter and nothing in it is Hunter-Valley-specific:
 
 | Verified in the slice | Explicitly out |
 | --- | --- |
-| **One region**, end to end | Dense regions that exceed the ceiling, and multi-region composition (§9.5) |
+| **One region**, end to end | Verifying a region too dense for one page, and multi-region composition (§9.5) |
 | Discovery → retrieval → rights → dedupe → brief → field files | Resolution, geoparsing, upload, write |
 | 6 MCP tools | The remaining six |
-| API ① ② ④ ⑦ ⑫ — five items | The other thirteen |
+| API ①–⑧ ⑪ ⑫ — ten items, the first v2 endpoints | The other eight |
 | Markdown brief, GPX, KML | QGIS project styling, PDF typesetting, storymaps |
 | Rights surfaced and gated | Automated rights *decisions* — never in scope at all |
 
@@ -1068,7 +1158,7 @@ Three of the five are numbers rather than judgements.
 1. **Layer discovery recall and precision.** Ground truth computed once, offline, by harvesting all
    2,118 public layers and calculating true extents — an *evaluation artefact, not a product
    feature* (§9.5). `tlcmap_list_layers` with a bbox must find every layer with a record in the box
-   and no others. **Target: recall 1.0.** Anything less means §5.1 ① is wrong, which is precisely
+   and no others. **Target: recall 1.0.** Anything less means §5.2 ① is wrong, which is precisely
    what the slice exists to find out.
 2. **Attribution completeness — must be 1.0.** All 36 layers appear in the attribution block with
    `creator`, `licence`, `citation` and `warning` reproduced verbatim. Automatable, binary, and a
@@ -1097,10 +1187,10 @@ usable in the field.** Worth doing, and worth not pretending is a metric.
   any region from the moment it exists* — the constraint is on what the slice measures, not on what
   the workflow accepts. What a dense or very large region additionally needs:
 
-  - **Paging, not chunking.** A region exceeding the 5,000-record ceiling is §5.1 ③'s problem, not
-    the skill's. Recursive bbox subdivision in the client is exactly what §3.8 forbids and §7.5
-    records as deliberately not built. ③ lands in Phase B and is what actually unlocks arbitrary
-    regions.
+  - **Paging, not chunking.** A region too large for one response is paged through v2 (§5.2 ③),
+    which the tools support from A1. Recursive bbox subdivision in the client is exactly what §3.8
+    forbids and §7.5 records as deliberately not built. What the slice does not do is *verify* a
+    region that needs many pages; that is Phase B's.
   - **Composition that is not concatenation.** Records near a boundary appear in more than one
     request, so deduplication runs over the union. Attribution is unioned, not repeated — 36 layers
     across four sub-queries is 36 entries. And **the statistics do not compose**: density over a
@@ -1131,12 +1221,15 @@ Run as two milestones, so the first is demonstrable before the second begins.
 transport, one tool calling the live API, a resource handle, the provenance envelope, a typed
 error, and read and write registered as separate scopes. Deployed to staging the way it will run in
 production (§13 Q2). It fixes the server's shape before the API work commits to a tool-shaped
-contract. Specified in [specs/A0-SERVER-SKELETON.md](./specs/A0-SERVER-SKELETON.md).
+contract. Built against the current API, which is all that exists before A1. Specified in
+[specs/A0-SERVER-SKELETON.md](./specs/A0-SERVER-SKELETON.md).
 
 **A1 — discovery and rights.**
-*API:* ① ② ④ ⑦.
+*API:* ① ② ③ ④ ⑤ ⑥ ⑦ ⑧ — the first v2 endpoints: the layer catalogue, the layer feed and its
+metadata, and place search.
 *MCP:* `tlcmap_list_layers`, `tlcmap_search_places`, `tlcmap_get_layer`,
-`tlcmap_get_layer_metadata` — HTTP transport, provenance envelope, typed errors.
+`tlcmap_get_layer_metadata` — HTTP transport, provenance envelope, typed errors. The server's
+upstream moves from the current API to v2.
 *Skills:* `tlcmap-search`, `tlcmap-cite`.
 *Evidence:* ground truth from a one-off exhaustive extent harvest, held in `evals/` and never
 shipped (§9.5).
@@ -1146,7 +1239,7 @@ layers, 273 contributed records plus the gazetteer — with attribution and warn
 restricted layer gated, and exclusions stated. Layer discovery scored for recall and precision.
 
 **A2 — synthesis and field outputs.**
-*API:* ⑫.
+*API:* ⑪ ⑫.
 *MCP:* `tlcmap_list_vocabulary`, `tlcmap_layer_statistics`.
 *Skills:* `tlcmap-analyse`, `tlcmap-visualise`.
 
@@ -1156,7 +1249,7 @@ field files.
 
 **Decision gate**, read at the end of each milestone rather than once at the end:
 
-- *A1 fails on discovery recall* — §5.1 ① is wrong, and that is the finding. It is the item the
+- *A1 fails on discovery recall* — §5.2 ① is wrong, and that is the finding. It is the item the
   rest of the programme leans on hardest, so learning it here rather than at Phase C is the point
   of the slice.
 - *A1 fails on attribution or warning propagation* — more serious than it sounds. Those criteria
@@ -1167,33 +1260,33 @@ field files.
 - *All pass* — proceed with the largest API change and the rights machinery both validated against
   a real workflow.
 
-### Phase B — API programme, and scale
+### Phase B — the resolver's API, and scale
 
-③ (`/api` over contributed layers), ⑤ (namespaced extended data), ⑥ (`udateend`), then the
-resolver's ⑨ ⑩ ⑪ ahead of Phase D, then the non-blocking remainder. All valuable independently of
+The resolver's ⑨ ⑩ and the rest of ⑪ ahead of Phase D, then ⑮. All valuable independently of
 everything above them.
 
-③ is the one that changes what the Phase A skill can *do* rather than how cleanly it does it: it
-removes the 5,000-record ceiling as a design concern and so **unlocks arbitrary regions** without
-the client ever subdividing a bounding box (§9.5). Phase B therefore also carries the composition
-work dense regions need — deduplication over the union, unioned attribution, statistics recomputed
-rather than combined — and the question of what the deliverable becomes when a region returns tens
+v2 pages from A1 (③), so the tools already reach a region of any size. Phase B verifies that they
+do, on a region that needs many pages, and carries the composition work that multi-region
+questions need — deduplication over the union, unioned attribution, statistics recomputed rather
+than combined (§9.5) — and the question of what the deliverable becomes when a region returns tens
 of thousands of records.
 
 Use cases 5 and 8 become deliverable here.
 
 ### Phase C — full read-only MCP server
 
-The six sketched tools, designed against what Phase A learned. Published at `mcp.tlcmap.org`, with
-rate limits (⑱) in place before it is public.
+The six sketched tools, designed against what Phase A learned, with the v2 endpoints they need:
+text layers with their mention offsets, clustering in real units (⑬) and closeness analysis.
+Conditional requests (⑭) behind the server's cache. Published at `mcp.tlcmap.org`, with v2's rate
+limits (⑱) and the server's own per-caller limits in place before it is public.
 
 **Deliverable:** TLCMap usable from Claude Desktop and any other MCP host, with no skills involved.
 The first deliverable that reaches users outside Claude Code.
 
 ### Phase D — the resolver and the remaining skills
 
-`tlcmap-resolve`, `tlcmap-geoparse`, `tlcmap-prepare`, plus the evaluation harness. Use cases 1, 2
-and 6 become deliverable.
+`tlcmap-resolve`, `tlcmap-geoparse`, `tlcmap-prepare`, plus the evaluation harness, and the import
+fixes (⑯). Use cases 1, 2 and 6 become deliverable.
 
 **Plan this as a second proving exercise rather than routine build-out.** Phase A deliberately
 leaves resolution unproven (§9.5), so Phase D carries its own gold set, its own precision / recall
@@ -1201,10 +1294,13 @@ leaves resolution unproven (§9.5), so Phase D carries its own gold set, its own
 
 ### Phase E — write
 
-§5.4, scoped tokens, write tools behind the scope separated in Phase A, and `push` in
-`tlcmap-prepare`. Unblocks use case 7. Tokens and permissions are the application's, extending its
-existing authorisation model; the server holds no credentials of its own and passes the caller's
-token through to the API, which decides.
+§5.4 with its OAuth authorisation, write tools behind the scope separated in Phase A, `push` in
+`tlcmap-prepare`, and the change feed (⑭). Unblocks use case 7. Permissions are the application's,
+extending its existing authorisation model. The server accepts only tokens issued for it, never
+forwards one, and calls v2 with its own credential exchanged for the caller's identity, so v2
+decides what each caller may do (§5.4).
+
+**Deliverable:** the whole design, and with it v2 declared stable (§5.1).
 
 ### Sequencing notes
 
@@ -1213,7 +1309,9 @@ token through to the API, which decides.
 - **The API work is built on the application as it stands** — Laravel 5.8 on PHP 7.4. The Laravel
   upgrade ([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)) is deferred and nothing here waits on it;
   the MCP server is unaffected by it either way.
-- **§5.1 Tier 1 is the long pole for the whole programme.** Phase A waits on it.
+- **v1 is not touched in any phase** (§5.1). Each phase's API work is new v2 code.
+- **§5.2 Tier 1 is the long pole for the whole programme.** A1 waits on all eight of its items,
+  which makes A1 the largest milestone in Phase A.
 - **Time to visible value is the metric to watch.** A1 exists so something is demonstrable early;
   if it slips past a few months, the scope is wrong, not the plan.
 
@@ -1225,7 +1323,7 @@ A proof of concept that cannot be measured is a demonstration, not a proof.
 
 | What | When | Measure |
 | --- | --- | --- |
-| **Layer discovery recall** | A1 | Against the offline extent harvest. Target 1.0 — it is what §5.1 ① is for |
+| **Layer discovery recall** | A1 | Against the offline extent harvest. Target 1.0 — it is what §5.2 ① is for |
 | **Attribution completeness** | A1 | Every layer touched, verbatim. **Must be 1.0** |
 | **Warning propagation** | A1 | Into every derived output including GPX/KML. **Must be 1.0** |
 | **Rights gating** | A1 | Restricted layers stop the pipeline rather than entering the brief |
@@ -1267,15 +1365,21 @@ not to invent coordinates is necessary and not sufficient.
 gets no evidence until Phase D. Nobody should read a successful Phase A as evidence that resolution
 works, because it contains none.
 
-**§5.1 ① is the long pole and Phase A depends on it entirely.** The honest cost of choosing the
-slice that proves it. The compensation is that it is the item most of the rest depends on, so the
-risk is taken early rather than avoided.
+**§5.2 Tier 1 is the long pole and Phase A depends on it entirely.** Eight items, including ①, the
+largest single piece of platform work. The honest cost of a slice that delivers working tools
+rather than a demonstration on one region. The compensation is that the rest of the programme
+depends on the same items, so the risk is taken early rather than avoided.
+
+**Two APIs.** v1 stays frozen while v2 grows beside it (§5.1), so for a period TLCMap's own search
+and the MCP tools can answer the same question differently, and v1's defects stay in the browser
+interface and TLCMap Views until they move to v2. Provenance names the request behind every result,
+and the v2 documentation lists the differences. The migration itself is unbudgeted (§13).
 
 **An unsupported platform under the API.** The API work is built on Laravel 5.8 and PHP 7.4, both
 out of support, in an application with no tests. Each §5 change ships with its own tests, so that
 it is protected now and carries through the upgrade when it comes
-([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)). The write phase's scoped tokens (§5.4) need an
-approach that works on 5.8.
+([LARAVEL-UPGRADE.md](./LARAVEL-UPGRADE.md)). The write phase needs TLCMap to act as an OAuth 2.1
+authorisation server on 5.8 (§5.4), which is a larger piece of work than issuing tokens.
 
 **A third language.** The server adds TypeScript and a Node service to a team whose application is
 PHP and whose skills are Python. The server is kept thin — validation, shape, provenance — so that
@@ -1312,19 +1416,21 @@ review bucket and the human gates are the product, not friction in it.
 4. **Which second region tests generalisation?** The skill is region-parameterised from the start,
    so this is about what to *verify*, not what to support. A sparse or remote region, and one
    carrying more restricted layers, would each probe a different edge cheaply once A1 works. A
-   region that *exceeds* the ceiling is Phase B's, because the honest answer there is ③ rather than
-   client-side chunking.
-6. **Do the skills require the MCP server, or degrade without it?** Requiring it is simpler and
+   region that needs many pages is Phase B's (§10).
+5. **Do the skills require the MCP server, or degrade without it?** Requiring it is simpler and
    honest; degrading gracefully costs the HTTP client this architecture exists to avoid building.
    Recommend requiring it.
-7. **How many skills, once the tools exist?** §7.3 flags `tlcmap-search` as provisional, because it
+6. **How many skills, once the tools exist?** §7.3 flags `tlcmap-search` as provisional, because it
    largely fails the §7.2 test once the tool layer carries what it used to know. Current expectation
    is six, with search folded into reference material the others carry. Phase A settles it, and the
    shipped skill set stays unsettled until it does.
-8. **Write API timeline** — sets Phase E, and it is the only thing standing between use case 7 and a
+7. **Write API timeline** — sets Phase E, and it is the only thing standing between use case 7 and a
    working managed layer.
-9. **Licensing and governance** of the three artefacts, which third parties will install. What
+8. **Licensing and governance** of the three artefacts, which third parties will install. What
    licence, and what support expectation?
-10. **Does shared skill code justify a build step?** Answerable only after A1, when two real
+9. **Does shared skill code justify a build step?** Answerable only after A1, when two real
    skills exist and the duplication can be measured rather than guessed (§4.3). Until then, no
    build step.
+10. **When is v1 deprecated, and who moves its clients?** TLCMap Views, the browser interface and
+   known external integrations move to v2 before v1 can go. v2 being declared stable is the
+   precondition (§5.1); the migration has no budget in this plan.

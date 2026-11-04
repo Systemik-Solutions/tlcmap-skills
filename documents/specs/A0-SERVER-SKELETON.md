@@ -57,7 +57,7 @@ controls, logging, health, and a production-shaped deployment.
 **Out of scope**
 
 - Every other tool in [DESIGN.md §6.3](../DESIGN.md#63-the-tool-surface), and the remaining
-  `tlcmap_get_layer` parameters (`sort`, `nulls`, `line`, `bbox`), which wait on §5.2 ⑦.
+  `tlcmap_get_layer` parameters (`sort`, `nulls`, `line`), which wait on §5.2 ⑦.
 - Any write tool, any authentication, any token handling (Phase E).
 - Any change to the TLCMap application. A0 runs against production tlcmap.org as it is.
 - Any workaround for behaviour §5 will fix ([§3.8](../DESIGN.md#38-fix-it-upstream)).
@@ -101,7 +101,8 @@ maintenance). A0 runs on **Node 24**, from the NodeSource apt repository.
 
 **A missing layer** (`/layers/99999999/json`) returns `200` with a FeatureCollection whose
 `features` is an empty array and whose `metadata` holds only a `warnnig` message — no `layer_id`,
-no `name`. By shape alone it is an empty layer. §5.1 ② has not landed.
+no `name`. By shape alone it is an empty layer. This is the current API, which stays as it is;
+honest errors (§5.2 ②) arrive with v2 ([DESIGN.md §5.1](../DESIGN.md#51-two-versions)).
 
 ---
 
@@ -317,8 +318,8 @@ between "not found" and "private"; it reports that the API returned something ot
 asked for and passes on what the API said. That is ordinary validation — the server checks that the
 response is about the thing it requested — and not the content sniffing
 [§7.5](../DESIGN.md#75-what-is-deliberately-not-built) rules out: no message text or key name, such
-as `warnnig`, is ever inspected. When §5.1 ②
-lands, the same request becomes `LAYER_NOT_FOUND` with no server change.
+as `warnnig`, is ever inspected. When the tool's upstream moves to v2 in A1 (§5.2 ②), the same
+request becomes `LAYER_NOT_FOUND`.
 
 Any other upstream `4xx` is `UPSTREAM_CONTRACT_VIOLATION`, since `tlcmap_get_layer` sends nothing
 the API should reject.
@@ -335,7 +336,8 @@ deployment enables, and only registrations in an enabled scope are made — a di
 appear in `tools/list`, rather than appearing and refusing.
 
 In A0 every registration is `read`, and **enabling `write` stops the server at startup** with a
-message saying that write tools require Phase E's token pass-through. The separation is real and
+message saying that write tools require Phase E's authorisation
+([DESIGN.md §5.4](../DESIGN.md#54-the-write-api)). The separation is real and
 enforced from the first commit (§6.2 rule 6) without pretending a capability exists.
 
 ---
@@ -534,9 +536,10 @@ in CI. It asserts against live tlcmap.org the behaviours A0 depends on:
 - `properties.id` present and `udatestart` / `udateend` numeric on layer 1125.
 - The missing-layer request producing `UPSTREAM_CONTRACT_VIOLATION`.
 
-That last assertion is **written to fail when §5.1 ② lands**. The fix is to change its expectation
-to `LAYER_NOT_FOUND` — the red test is how A0 learns the API changed
-([§4.3](../DESIGN.md#43-packaging-and-distribution)).
+That last assertion records the current API's behaviour, which that API keeps
+([DESIGN.md §5.1](../DESIGN.md#51-two-versions)). When the tool's upstream moves to v2 in A1, its
+expectation becomes `LAYER_NOT_FOUND`, and from then on the check is how the server learns that v2
+changed ([§4.3](../DESIGN.md#43-packaging-and-distribution)).
 
 ---
 
@@ -565,14 +568,17 @@ with the date:
 
 ## 14. API dependencies
 
-What changes in A0's behaviour as [§5](../DESIGN.md#5-layer-1--the-api) items land. None needs
-feature detection: each is a fixed expectation updated when the API changes, caught by the
-production check.
+A0 is built against the current API, which is frozen
+([DESIGN.md §5.1](../DESIGN.md#51-two-versions)), so no [§5](../DESIGN.md#5-layer-1--the-api)
+item changes A0 as it stands. They reach `tlcmap_get_layer` when its upstream moves to v2 in A1,
+the A1 items together and the later ones as they land. None needs feature detection: each is a
+fixed expectation updated in the move or when v2 changes, caught by the production check. The move
+also changes the upstream URL, and with it the request each result's provenance records.
 
-| Item | Effect on A0 |
+| Item | Effect on `tlcmap_get_layer` |
 | --- | --- |
-| §5.1 ② honest errors | `LAYER_NOT_FOUND` and `LAYER_PRIVATE` go live; the missing-layer case stops being `UPSTREAM_CONTRACT_VIOLATION`. The production check fails, and its expectation is updated. |
-| §5.2 ⑤ namespaced extended data | Removes the shadowing limitation in §4. The feed's shape changes, so the shape check and fixtures are updated, and resource bytes — served verbatim — change shape for clients. |
-| §5.2 ⑦ `nulls` and `include_undated` | Lets `tlcmap_get_layer` gain `sort` and `nulls` as additive parameters ([§6.5](../DESIGN.md#65-tool-surface-stability)). |
-| §5.3 ⑭ `ETag` / `Last-Modified` | Allows conditional revalidation in the cache instead of TTL-only expiry. |
-| §5.3 ⑰ `warnnig` → `warning` | No code change; `details` passes on whatever the API says. |
+| §5.2 ② honest errors | `LAYER_NOT_FOUND` and `LAYER_PRIVATE` go live; the missing-layer case stops being `UPSTREAM_CONTRACT_VIOLATION`. The production check's expectation is updated. |
+| §5.2 ⑤ namespaced extended data | Removes the shadowing limitation in §4. v2's feed has a different shape, so the shape check and fixtures are updated, and resource bytes — served verbatim — have v2's shape for clients. |
+| §5.2 ⑦ `nulls` and `include_undated` | Lets `tlcmap_get_layer` gain `sort`, `nulls` and `line` as additive parameters ([§6.5](../DESIGN.md#65-tool-surface-stability)). |
+| §5.3 ⑭ `ETag` / `Last-Modified` | Phase C. Allows conditional revalidation in the cache instead of TTL-only expiry. |
+| §5.3 ⑰ `warnnig` → `warning` | v2's key is `warning`. No code change; `details` passes on whatever the API says. |

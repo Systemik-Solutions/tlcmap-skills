@@ -151,7 +151,7 @@ the thing that fixes it, and sentence context is what an LLM brings.**
 
 ### Prerequisites and status
 
-Needs §5.1 ②③, §5.2 ⑨ (match score), §5.3 ⑩⑪ (bulk ID fetch, vocabularies).
+Needs §5.2 ②③, §5.3 ⑨ (match score), ⑩⑪ (bulk ID fetch, vocabularies).
 **Phase D**, with the resolver.
 
 ---
@@ -240,7 +240,7 @@ makes the match decidable.
 
 ### Prerequisites and status
 
-Needs §5.2 ⑨ (match score — the one signal that cannot be obtained any other way),
+Needs §5.3 ⑨ (match score — the one signal that cannot be obtained any other way),
 §5.3 ⑩ (bulk fetch by ID, or it is one request per candidate) and ⑪ (vocabularies, or a
 `state`/`lga` filter cannot be constructed at all).
 **Phase D.** Fully supported by today's data; the gold set (§11 of the design) measures it.
@@ -289,7 +289,7 @@ Thirty-six layers, from weather stations (461) to convict landscapes (1270), tha
 researcher had no way of knowing existed. **None of them could be found through the layer
 catalogue**, because only 4 of 2,118 public layers declare a bounding box
 ([DESIGN.md §2.2](./DESIGN.md#22-the-catalogue-measured)). This use case is the
-clearest argument for §5.1 ①, the catalogue extent facet.
+clearest argument for §5.2 ①, the catalogue extent facet.
 
 The brief this produces groups those 273 records by type — water sources, stations, heritage
 sites, language boundaries — cites each by TLCMap UID, and carries each contributing layer's
@@ -299,7 +299,7 @@ licence and warning alongside its data.
 
 1. **Define the region** — from a placename, a bbox, or a polygon. Longitude first, ring
    closed; the skill handles the convention so the researcher does not have to.
-2. **Discover layers** (`tlcmap-search`) — one faceted catalogue request once §5.1 ① exists.
+2. **Discover layers** (`tlcmap-search`) — one faceted catalogue request once §5.2 ① exists.
 3. **Retrieve** — gazetteer records plus the contributed layers that intersect, cached and
    checksummed.
 4. **Deduplicate** (`tlcmap-analyse`) — the same waterhole in three layers is one feature with
@@ -327,7 +327,7 @@ licence and warning alongside its data.
 
 ### Prerequisites and status
 
-Needs §5.1 ① above all — without the extent facet, regional discovery does not work.
+Needs §5.2 ① above all — without the extent facet, regional discovery does not work.
 **Phase A: this is the vertical slice.**
 
 ---
@@ -479,8 +479,8 @@ GET /api?format=json&containsname=creek&per_page=100&page=1
 ```
 
 Ninety-four thousand records for one word. That is well past the 5,000-record ceiling on
-`/places`, which is why this use case harvests through `/api` — and why §5.1 ③, extending
-`/api` to contributed layers, matters if the analysis is to include them.
+`/places`, which is why this use case harvests through `/api` — and why §5.2 ③, paging through
+every source in v2, matters if the analysis is to include contributed layers.
 
 The classification step is where the model earns its place: given a sample of names, it
 proposes and refines the heuristics (suffix patterns, known-toponym lists, morphological
@@ -519,7 +519,8 @@ labels itself at scale — the code does, reproducibly, and the boundary cases g
 
 ### Prerequisites and status
 
-Works today for gazetteer-only analysis. Needs §5.1 ③ to include contributed layers.
+Works today for gazetteer-only analysis. Needs §5.2 ③, in v2 from A1, to include contributed
+layers.
 **Phase B.**
 
 ---
@@ -752,8 +753,8 @@ distinguishing who went where.
 
 TLCMap Views does the map for free. `latest/journey.html` needs `LineString` features, which
 a layer feed generates with `line=time`; `latest/timeline.html` needs `udatestart` and
-`udateend`, which layer feeds carry correctly — search feeds do not, because of the
-`udateend` bug (§5.2 ⑥).
+`udateend`, which layer feeds carry correctly — the current API's search feeds do not, because
+of the `udateend` bug; v2's do (§5.2 ⑥).
 
 ### The pipeline
 
@@ -784,8 +785,8 @@ a layer feed generates with `line=time`; `latest/timeline.html` needs `udatestar
 
 ### Prerequisites and status
 
-Works with today's API. Improved by §5.2 ⑥ (`udateend`) so timelines can be built from
-searches as well as layers. **Phase B.**
+Works with today's API. Improved by §5.2 ⑥ (`udateend`, correct in v2 from A1) so timelines
+can be built from searches as well as layers. **Phase B.**
 
 ---
 
