@@ -12,7 +12,10 @@ any of it.
 [tlcmap-mcp](https://github.com/Systemik-Solutions/tlcmap-mcp), runs on staging at
 `https://test-mcp.tlcmap.org` with one read-only tool, `tlcmap_get_layer`
 ([acceptance record](https://github.com/Systemik-Solutions/tlcmap-mcp/blob/main/docs/acceptance/A0.md),
-2026-11-03). Nothing in `skills/` exists yet.
+2026-11-03). The API half of milestone A1 (API v2) is implemented and reviewed on branch `a1-api-v2`
+of the application, awaiting merge into `tlcmap-api-enhancement`, and not deployed
+([spec](documents/specs/A1-API-V2.md),
+[acceptance record](documents/acceptance/A1-API-V2.md)). Nothing in `skills/` exists yet.
 
 ## Documents
 
@@ -24,6 +27,7 @@ any of it.
 | [documents/plans/A0-SERVER-SKELETON-PLAN.md](documents/plans/A0-SERVER-SKELETON-PLAN.md) | The task-by-task implementation plan for A0 |
 | [documents/specs/A1-API-V2.md](documents/specs/A1-API-V2.md) | The API half of milestone A1 — the first API v2 endpoints, items ① to ⑧ |
 | [documents/plans/A1-API-V2-PLAN.md](documents/plans/A1-API-V2-PLAN.md) | The task-by-task implementation plan for the A1 API half |
+| [documents/acceptance/A1-API-V2.md](documents/acceptance/A1-API-V2.md) | The acceptance record for the A1 API half — tests mapped to items ① to ⑧, performance notes, what is left for later |
 | [documents/LARAVEL-UPGRADE.md](documents/LARAVEL-UPGRADE.md) | Upgrading the TLCMap application from Laravel 5.8 to 13, with a time estimate — deferred to a later phase; nothing here depends on it |
 
 Read DESIGN.md first. USE-CASES.md is the detail behind its §8.
