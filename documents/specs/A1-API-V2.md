@@ -174,8 +174,8 @@ GET /api/v2/layers/{id}/features      LayerController@features
 ```
 
 The `api_v2` group in `app/Http/Kernel.php` holds the v2 throttle and CORS middleware (§12) and
-`bindings`; no session, cookies or CSRF. `{id}` is constrained to digits at the route, so
-`/api/v2/layers/abc` is a `404 NOT_FOUND`. Only `GET` is routed; any other method is
+`bindings`; no session, cookies or CSRF. `{id}` is constrained to 1–18 digits at the route, so
+`/api/v2/layers/abc` and a 19-digit id are a `404 NOT_FOUND` (18 digits always fit a PHP integer). Only `GET` is routed; any other method is
 `405 METHOD_NOT_ALLOWED` (§11).
 
 ### 3.2 Code layout
