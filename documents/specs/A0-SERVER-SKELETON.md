@@ -579,6 +579,6 @@ also changes the upstream URL, and with it the request each result's provenance 
 | --- | --- |
 | §5.2 ② honest errors | `LAYER_NOT_FOUND` and `LAYER_PRIVATE` go live; the missing-layer case stops being `UPSTREAM_CONTRACT_VIOLATION`. The production check's expectation is updated. |
 | §5.2 ⑤ namespaced extended data | Removes the shadowing limitation in §4. v2's feed has a different shape, so the shape check and fixtures are updated, and resource bytes — served verbatim — have v2's shape for clients. |
-| §5.2 ⑦ `nulls` and `include_undated` | Lets `tlcmap_get_layer` gain `sort`, `nulls` and `line` as additive parameters ([§6.5](../DESIGN.md#65-tool-surface-stability)). |
+| §5.2 ⑦ `nulls` and `include_undated` | Lets `tlcmap_get_layer` gain `sort` and `nulls` as additive parameters ([§6.5](../DESIGN.md#65-tool-surface-stability)). v2 pages layer features, so `line` is not offered ([A1 API spec §10.4](./A1-API-V2.md#104-get-apiv2layersidfeatures--a-layers-records)). |
 | §5.3 ⑭ `ETag` / `Last-Modified` | Phase C. Allows conditional revalidation in the cache instead of TTL-only expiry. |
 | §5.3 ⑰ `warnnig` → `warning` | v2's key is `warning`. No code change; `details` passes on whatever the API says. |

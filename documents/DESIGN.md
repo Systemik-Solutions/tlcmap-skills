@@ -484,8 +484,8 @@ plan (§13).
 **① Layer catalogue with computed extent and facets.**
 
 ```
-GET /api/v2/layers?q=&bbox=&polygon=&datefrom=&dateto=&include_undated=&recordtype=
-                  &creator=&has_license=&has_warning=&min_records=&page=&per_page=
+GET /api/v2/layers?q=&bbox=&polygon=&date_from=&date_to=&include_undated=&record_type=
+                  &creator=&has_license=&has_warning=&min_records=&cursor=&per_page=
 ```
 
 with `total` in every response, and computed `bbox`, `date_range` and `record_count` on every
@@ -511,6 +511,9 @@ layers and two of those four are malformed (§2.2), so they stay a separate hint
 | Missing analysis parameter | `500` | `400` + JSON naming the parameter |
 | Bad `format` on `/api` | `302` → home page | `400` + JSON naming the parameter |
 | `id=` on `/places` | `302` → the path form | No redirects: every resource has one URL |
+
+`413` is reserved. A1 bounds every request with a capped `per_page`, so no A1 request is too large to
+answer and nothing raises it yet; an oversized `per_page` is a `400`.
 
 > **Required by:** every tool, because it is the difference between a server that reads a status
 > code and one that guesses from content types — guesswork that would otherwise be baked into the
@@ -783,14 +786,15 @@ A layer's records and metadata.
 
 | | |
 | --- | --- |
-| **In** | `layer_id`, `sort`, `nulls` (`first`\|`last`), `line` (`none`\|`route`\|`time`) |
+| **In** | `layer_id`, `sort`, `nulls` (`first`\|`last`) |
 | **Out** | `{metadata, record_count, extent, date_range, undated_count, resource_uri, provenance}` |
 | **Errors** | `LAYER_PRIVATE` (403), `LAYER_NOT_FOUND` (404) |
 
 Summary plus a resource handle; never inline features. `nulls=last` (§5.2 ⑦) stops sorting from
 silently deleting undated records. `undated_count` is explicit so the exclusion can be reported
 rather than discovered. A layer's records within a region are a `tlcmap_search_places` query with
-`layer_ids[]` and `bbox`, so this tool takes no geometry filter.
+`layer_ids[]` and `bbox`, so this tool takes no geometry filter. v2 pages a layer's features, so there
+is no `line`: a client draws a route or timeline line from the ordered points.
 
 #### `tlcmap_get_layer_metadata`
 
@@ -1233,6 +1237,7 @@ upstream moves from the current API to v2.
 *Skills:* `tlcmap-search`, `tlcmap-cite`.
 *Evidence:* ground truth from a one-off exhaustive extent harvest, held in `evals/` and never
 shipped (§9.5).
+The API half is specified in [specs/A1-API-V2.md](./specs/A1-API-V2.md).
 
 **Deliverable:** a rights-complete inventory of everything TLCMap holds for the Hunter Valley — 36
 layers, 273 contributed records plus the gazetteer — with attribution and warnings verbatim, the
