@@ -215,8 +215,12 @@ Nothing here is deployed. tlcmap.org has none of the v2 migrations, code, or doc
 
 v2 ships with a single configured limit, 60 requests a minute per address (`config/api_v2.php`,
 `API_V2_RATE_LIMIT`), with its own counter separate from v1's. It is not a quota granted on a
-credential. The MCP server's upstream **must not move to v2** until ⑱ is built: the server alone
-would exceed 60 a minute and be throttled. Raising the limit is configuration until then.
+credential. Per [spec §16](../specs/A1-API-V2.md#16-what-the-mcp-server-can-rely-on), the MCP
+server's upstream moves to v2 only on a deployment whose limit will not throttle it; until ⑱,
+setting that limit for the server's load is configuration (`API_V2_RATE_LIMIT`). For A1's staging
+server, with little traffic, that is enough. ⑱ — a quota of the server's own, granted on a
+credential or an address — is needed before the server is public
+([DESIGN §5.3](../DESIGN.md#53-tier-2--later-phases), Phase C).
 
 ### Release prerequisites
 
@@ -239,7 +243,9 @@ Found in review; deliberately not fixed on this branch (ledger ruling R14).
 - **`extended_data` collation.** The `textmatch` pre-filter's soundness relies on
   `dataitem.extended_data` having the database's default collation, as `v2_extended_value`'s result
   does; verified on `tlcmap_test` only. Check production's column before release (ruling R24).
-- **MCP upstream stays on v1** until ⑱ (above).
+- **The v2 limit set for the MCP server's load** on the deployment it uses, before its upstream
+  moves to v2 (above); `TrustProxies` must be right first, or the server shares one key with every
+  client.
 
 ### Residuals for the user's decision
 
