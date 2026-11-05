@@ -77,6 +77,11 @@ Read from the application source on `tlcmap-api-enhancement` at `310deea`, and m
 local database (`temp_tlcmap`: PostgreSQL 14.5, PostGIS 3.2.2, pg_trgm 1.6; 187 layers, 687,235
 records — a subset of production), 2026-11-05. Facts about production are DESIGN's, with their dates.
 
+`temp_tlcmap` is the local database to develop against: all 36 migrations applied, both gazetteers
+loaded, records changed as recently as 2026-11-02. The other local database, `tlcmap`, is a
+December 2022 snapshot (62 layers, 31,331 records, no gazetteers) that predates 21 migrations — it has
+no `datasource_id` or `geom` — and cannot run the current application's search.
+
 **Platform.** Laravel 5.8.38, PHPUnit 7.5.20. Production runs PHP 7.4
 ([DESIGN.md §10](../DESIGN.md#sequencing-notes)); Laragon has PHP 7.4.19 and 8.2.9. The CLI on the
 path is 8.2, so the tests are run with 7.4 explicitly.
@@ -100,8 +105,14 @@ path is 8.2, so the tests are run with 7.4 explicitly.
   text). No migration or seeder creates rows 1–3, or any `recordtype` row.
 - `subject_keyword` and `dataset_subject_keyword` hold layer keywords.
 - Indexes: btree on `dataitem.id`, `dataset_id`, `recordtype_id`, `uid`, `original_id`,
-  `datasource_id`. **No GIST and no trigram index.** The local index names (`idx_18848_…`) show the
-  database was converted from MySQL, so its schema did not come from the migrations alone.
+  `datasource_id`. **No GIST and no trigram index.**
+- **The base schema probably did not come from the migrations.** The older indexes are named
+  `idx_<number>_<name>` (`idx_18848_primary`, `idx_18848_fk_dataitem_recordtype_id`,
+  `idx_18867_dataset_subject_keyword_subject_keyword_id_foreign`) — pgloader's pattern for indexes it
+  copies from MySQL, around MySQL-style names (`PRIMARY`, Laravel's MySQL-only `_foreign` indexes). The
+  15 migrations up to 2022-07 are recorded in `public.migrations` as one batch; every later one ran
+  natively and created Laravel-named indexes. An inference, not a confirmed history — but enough that a
+  database built from the migrations alone may differ, which §13.1 checks first.
 
 **v1's stored dates are incomplete and partly wrong.** `udatestart`/`udateend` were filled once by
 migration `2025_02_05_034149` and are set afterwards only by the web forms' add and edit paths
@@ -816,8 +827,8 @@ The command refuses to run unless the target database name ends in `_test`. Each
 transaction rolled back at the end (`DatabaseTransactions`) and builds its own records with factories
 for `Dataset`, `Dataitem` and `SubjectKeyword`. No test depends on data it did not create.
 
-Whether every migration runs from scratch is **unproven** — the local database was converted from
-MySQL. The plan's first task establishes it, and fixes or works around a migration that does not run
+Whether every migration runs from scratch is **unproven** — the base schema appears to have come from
+a MySQL conversion rather than the migrations (§2). The plan's first task establishes it, and fixes or works around a migration that does not run
 only inside the test bootstrap, never by changing a migration production has already run.
 
 Tests run with PHP 7.4 (`C:\laragon\bin\php\php-7.4.19-Win32-vc15-x64\php.exe vendor/bin/phpunit`),
