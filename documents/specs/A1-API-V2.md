@@ -812,20 +812,23 @@ No credentials header: v2 is public and cookieless.
 ### 13.1 The test database
 
 A dedicated database, `tlcmap_test`, on the local PostgreSQL. `phpunit.xml` gains a `V2` testsuite
-(`tests/V2`) and points tests at it (`DB_DATABASE=tlcmap_test`, `DB_SCHEMA=tlcmap`).
+(`tests/V2`) and points tests at it (`DB_DATABASE=tlcmap_test`). `DB_SCHEMA` stays unset, as in the
+application: the extensions live in `public`, and every table is named with its `tlcmap.` schema.
 
 An artisan command, `tlcmap:test-db`, (re)builds it and is the documented first step:
 
-1. Drop and create the `tlcmap` schema in `tlcmap_test`.
-2. `CREATE EXTENSION IF NOT EXISTS postgis` and `pg_trgm`.
+1. Create `tlcmap_test` if it does not exist; drop and recreate its `tlcmap` and `public` schemas.
+2. `CREATE EXTENSION IF NOT EXISTS postgis` and `pg_trgm`, in `public`.
 3. Run every migration from scratch.
 4. Seed the four `datasource` rows (with their production `search_param_name` values) and the
    `recordtype` rows (`Other`, `Placename`, `Media`, `Text`, `Event`, `Person`, `Journey`, `Site`,
    `Organisation`).
 
 The command refuses to run unless the target database name ends in `_test`. Each test runs inside a
-transaction rolled back at the end (`DatabaseTransactions`) and builds its own records with factories
-for `Dataset`, `Dataitem` and `SubjectKeyword`. No test depends on data it did not create.
+transaction rolled back at the end (`DatabaseTransactions`) and builds its own layers, records and
+keywords with fixture builders that insert rows directly, with explicit ids — sequences do not roll
+back, so ids from them would make golden files unrepeatable, and the `Dataitem` model's date mutator
+would normalise the malformed dates the tests need. No test depends on data it did not create.
 
 Whether every migration runs from scratch is **unproven** — the base schema appears to have come from
 a MySQL conversion rather than the migrations (§2). The plan's first task establishes it, and fixes or works around a migration that does not run
@@ -903,7 +906,7 @@ primary reference, Australian English, never "GHAP"):
 - The developer index links to v2 and states that v2 is unstable until declared stable.
 
 Examples in the docs are produced by running the documented request against the local application
-with test fixtures, not written by hand.
+(`temp_tlcmap`), not written by hand, and trimmed only by removing features or array entries.
 
 ---
 
