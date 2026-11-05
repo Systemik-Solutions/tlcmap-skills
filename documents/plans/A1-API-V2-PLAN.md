@@ -205,8 +205,8 @@ public function test_fixture_record_gets_geom_from_trigger()
 public function test_fixture_ids_restart_each_test()      // first Fixtures::layer() returns 900001
 public function test_civil_reference_values()
 {   // Civil::udate(1970) === 0; Civil::udate(1856) === -3597523200000;
-    // Civil::udate(1856, 3, 4) === -3592080000000; Civil::udate(-399) === -74758464000000;
-    // Civil::udate(-51020) === -1672202966400000; Civil::udate(2000, 2, 29) === 951782400000
+    // Civil::udate(1856, 3, 4) === -3592080000000; Civil::udate(-399) === -74758377600000;
+    // Civil::udate(-51020) === -1672202880000000; Civil::udate(2000, 2, 29) === 951782400000
 }
 ```
 

@@ -370,8 +370,8 @@ Reference values, computed independently of PostgreSQL:
 | `400` | −49,544,438,400,000 |
 | `1` | −62,135,596,800,000 |
 | `-1` | −62,167,219,200,000 |
-| `-400` | −74,758,464,000,000 |
-| `-51021` | −1,672,202,966,400,000 |
+| `-400` | −74,758,377,600,000 |
+| `-51021` | −1,672,202,880,000,000 |
 | `2000-02-29` | 951,782,400,000 |
 
 The largest magnitudes stay well inside a bigint and inside JavaScript's safe-integer range
