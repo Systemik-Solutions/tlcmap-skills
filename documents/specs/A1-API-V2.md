@@ -270,15 +270,20 @@ Every endpoint follows these.
   silent no-op. (The global `ConvertEmptyStringsToNull` middleware turns it into `null`; v2 checks
   key presence, so a present key with a null value is the empty case.)
 - **Booleans** are `true` or `false`, nothing else.
+- **Parameters are text.** A name or value that is not valid UTF-8, or contains a NUL character, is
+  `400 INVALID_PARAMETER` with rule `encoding` (accepts `UTF-8 text without NUL characters`). The
+  raw query string is checked as well as the parsed one, because PHP cuts a name at a NUL and the
+  global `TrimStrings` middleware strips a trailing one, either of which would silently change the
+  query.
 - **Names are snake_case**: `date_from`, `date_to`, `include_undated`, `record_type`, `feature_term`,
   `extended_data`, `summary_only`, `per_page`, `has_license`, `has_warning`, `min_records`.
 
 ### 5.2 The effective query is echoed
 
-Every successful response carries `query`: every parameter of the endpoint with its effective value,
+Every successful list or search response carries `query`: every parameter of the endpoint with its effective value,
 defaults applied, and `null` for filters not given. Lists are arrays; numbers are numbers. A reader
 always sees that `match` was `exact` or `include_undated` was `true` without knowing the defaults.
-`cursor` is echoed as given; `seed` as used.
+`cursor` is echoed as given; `seed` as used. Layer detail takes no parameters and carries no `query`.
 
 ### 5.3 Paging
 
@@ -522,14 +527,16 @@ rejected. At most 10 clauses.
 | --- | --- | --- |
 | `=` | any string | equals it exactly (case-sensitive) |
 | `textmatch` | any string | contains it, case-insensitively |
-| `>` / `<` | a decimal number (`-12`, `3.5`) | is a decimal number (after trimming) and is greater / less |
+| `>` / `<` | a decimal number (`-12`, `3.5`), at most 1,000 digits either side of the point | is such a number (after trimming) and is greater / less |
 | `before` | a date `v2_udate` accepts | is such a date and its period ends before the operand's begins: `v2_udate_end(v) < v2_udate(x)` |
 | `after` | a date `v2_udate` accepts | is such a date and its period begins after the operand's ends: `v2_udate(v) > v2_udate_end(x)` |
 
 A value of the wrong kind on the request side (`Years > many`) is `400 FILTER_REJECTED`. On the data
 side, a record whose field is absent, empty, or not of the operator's kind does not match — that is
 what the filter asks — and the field is read with `v2_extended_value`, so malformed stored XML makes
-that record not match rather than failing the request.
+that record not match rather than failing the request. A stored number with more than 1,000 digits
+either side of the point is not of the operator's kind, so it does not match — PostgreSQL's
+`numeric` cannot hold every such value, and one contributor's record must not fail every query.
 
 ---
 
