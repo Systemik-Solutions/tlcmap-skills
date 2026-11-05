@@ -5,21 +5,21 @@ The API half of milestone A1 — the first API v2 endpoints, items ① to ⑧ of
 [the spec](../specs/A1-API-V2.md) and [the plan](../plans/A1-API-V2-PLAN.md). Written against
 [spec §15](../specs/A1-API-V2.md#15-acceptance).
 
-Recorded 2026-11-05. The `EXPLAIN ANALYZE` plans are in
-[A1-API-V2-PLANS.md](A1-API-V2-PLANS.md).
+Recorded 2026-11-05; updated 2026-11-06 for Task 18 and the merge. The `EXPLAIN ANALYZE` plans
+(taken at b1aa4c6, before Task 18) are in [A1-API-V2-PLANS.md](A1-API-V2-PLANS.md).
 
-**Status: implemented and reviewed. Not merged, not deployed.** The merge into
-`tlcmap-api-enhancement` waits on the user's decision on the two open items under
-[Left for later](#6-left-for-later): the date-filtered catalogue and the `extended_data` filter
-without `layers`.
+**Status: merged into `tlcmap-api-enhancement` (2026-11-06), not deployed.** After this record was
+first taken, the user decided the two slow paths it found should be fixed before the merge; Task 18
+did that (see [§4.1](#41-after-task-18-2026-11-06)). The date-filtered catalogue remains above the
+~2 s target in the production estimate and is recorded under [Left for later](#6-left-for-later).
 
 ## 1. Commits
 
 | Repository | Branch | Commits |
 | --- | --- | --- |
-| `tlcmap-ghap` (the TLCMap application) | `a1-api-v2`, cut from `tlcmap-api-enhancement` at 310deea | 30 commits, 310deea..b1aa4c6 (head b1aa4c6, "Guard the test database rebuild and record its datasource adjustment"). 69 files, +8,259 −1; 36 under `app/`, `routes/`, `database/` (+3,256 −1) |
+| `tlcmap-ghap` (the TLCMap application) | `a1-api-v2`, cut from `tlcmap-api-enhancement` at 310deea; fast-forwarded into `tlcmap-api-enhancement` on 2026-11-06 and deleted | 33 commits, 310deea..9209514 (head 9209514, "Pre-filter extended_data clauses on the raw text before parsing the XML"). 71 files, +8,725 −1. Task 18 is d4c2891, c414d05, 9209514 |
 | `tlcmap-docs` | `api-v2` | 337b7ce, ca73f1a, 7d7cf0c on 5dd3e22 (8 files, +2,564), not pushed |
-| `tlcmap-skills` (this repository) | `main` | spec and plan: this record's parent commit 20014f3 and before |
+| `tlcmap-skills` (this repository) | `main` | spec and plan: up to this record's update; first taken at bed04bd |
 
 Files outside the v2 tree that the branch changes: `app/Exceptions/Handler.php`,
 `app/Http/Kernel.php`, `app/Providers/RouteServiceProvider.php` and `phpunit.xml`, each to register
@@ -29,24 +29,26 @@ guard below is what proves the responses did not change.
 
 ## 2. Verification
 
-Run 2026-11-05 at b1aa4c6, PHP 7.4.19 (`php-7.4.19-Win32-vc15-x64`, the production version), the
-working tree clean:
+Run 2026-11-06 at 9209514 (the merged head), PHP 7.4.19 (`php-7.4.19-Win32-vc15-x64`, the production
+version), the working tree clean:
 
 ```
 $PHP74 artisan tlcmap:test-db                    Test database 'tlcmap_test' is ready.
-$PHP74 vendor/bin/phpunit --testsuite V2         OK (319 tests, 2294 assertions)
+$PHP74 vendor/bin/phpunit --testsuite V2         OK (334 tests, 2428 assertions)
 $PHP74 vendor/bin/phpunit --testsuite V1Guard    OK (5 tests, 15 assertions)
 ```
 
+(At b1aa4c6, before Task 18, on 2026-11-05: V2 319 tests, 2,294 assertions; V1Guard the same.)
+
 `tlcmap:test-db` rebuilt `tlcmap_test` from nothing: every migration (the 36 that existed plus the
-three `2026_11_10_*` v2 migrations) ran from scratch. The command refuses a database whose name
+four `2026_11_10_*` v2 migrations) ran from scratch. The command refuses a database whose name
 does not end in `_test`.
 
 Spec §15, point by point:
 
 | §15 | Met |
 | --- | --- |
-| 1. Code, migrations and tests merged on `tlcmap-api-enhancement` | **Not yet** — on `a1-api-v2`, awaiting the user |
+| 1. Code, migrations and tests merged on `tlcmap-api-enhancement` | Yes — fast-forward to 9209514, 2026-11-06 |
 | 2. `tlcmap:test-db` builds from nothing; `V2` and the v1 guard pass under PHP 7.4 | Yes (above) |
 | 3. Every item ① to ⑧ has its §13.4 tests; the invariant passes | Yes (§3 below) |
 | 4. The §14 documentation committed on `api-v2` in `tlcmap-docs` | Yes (337b7ce, ca73f1a, 7d7cf0c) |
@@ -117,6 +119,35 @@ field `State` is the most common in the data after two identifiers and `"NSW"` m
 Request 5's cursor was obtained by following `next_cursor` through 100 pages at `per_page=5000`;
 the request itself uses the default `per_page` of 500.
 
+### 4.1 After Task 18 (2026-11-06)
+
+Task 18 added a GIN trigram index on `dataitem.extended_data` with a pre-filter that parses a
+record's XML only if its raw text contains the clause's literal runs (with a fallback, and a partial
+index, for records whose raw text may not read as written), and `v2_udate_range`, which gives both
+bounds of a date from one parse. Matched ids were compared with and without the pre-filter on
+`temp_tlcmap` for 65 filters (15 on real non-ASCII values): no differences; the HTTP bodies were
+identical before and after. Index builds on `temp_tlcmap`: the trigram index 69 s, 47 MB over 103 MB
+of extended data; the partial index 5 s, 8 KB (no rows).
+
+Over HTTP, three runs, median, `per_page=10` for the place searches:
+
+| Request | Before | After |
+| --- | ---: | ---: |
+| `places?extended_data=State = "NSW"` (3,308 match) | 50.18 s | **1.39 s** |
+| `places?extended_data=StationID = "47001"` (1 match) | `500` after ~205 s (60 s execution limit) | **0.58 s** |
+| `places?extended_data=Newspaper textmatch "morning HERALD"` (307 match) | ~48 s (database work) | **0.80 s** |
+| `places?extended_data=Years > 20` (11,581 match) | ~605 s (database work) | **4.85 s** |
+| `layers?date_from=1820&date_to=1860` | 1.19 s | **1.11 s** |
+| `layers?per_page=100` | 0.67 s | 0.62 s |
+| `places?bbox=150.8,-33.1,151.4,-32.6` | 0.43 s | 0.47 s |
+
+"Database work" is the summary and first page measured in process, because over HTTP those requests
+exceed the 60 s limit. The `extended_data` cost now grows with the number of candidate records (those
+containing the literal runs), about 0.06–0.2 ms each: a rare clause costs well under a second; a
+clause that genuinely matches tens of thousands of records costs seconds, because the summary must
+count them (`group = hydrology`, 110,706 matches, 7.0 s of database work). The catalogue date filter
+gained only 7–15%: each `v2_udate_range` call is a plpgsql call whose overhead dominates.
+
 ### Production estimates
 
 An estimate, not a measurement: production has 2,118 layers against 187 here, a ratio of 2,118 / 187
@@ -133,6 +164,10 @@ for this record, so no figure is given.
 | 5 | **all visible records**: the summary scans the whole table | not estimated; 1.4 s at 687,235 records, and the summary cost (0.86 s) grows with the record count |
 | 6 | the records in all layers: the date predicate is evaluated on every dated record to know which layers match | **up to about 6 s** if the matching join grows fully with layers (1.108 − 0.463 + 0.463 × 11.33 = 5.9 s); [the earlier analysis](#6-left-for-later) split the join into a table-size part and a layer part and put the low end at about 3.7 s. A target of about 2 s is **not met** |
 | 7 | **all records**: every row of `dataitem` is read and its XML parsed | not estimated; 50.9 s at 687,235 records (344,350 of them with extended data, 103 MB of text). At least this slow in production unless production has far fewer records. The target is not met by a factor of about 25 |
+
+After Task 18 (§4.1): request 6 is about **4–5 s** on production (the matching join, ~350 ms here,
+×11.33); request 7 costs about 0.2 ms per candidate record, so `State = "NSW"` is about 1–1.5 s if
+production has as many `State` records as here and about 9 s if it has 11 times as many.
 
 The other four requests (1, 2, 3, 4) are at or well under the accepted ~2 s on this estimate. For
 reference, before the page-first rewrite in the final fix wave the unfiltered catalogue computed every
@@ -170,7 +205,7 @@ mismatches.
 
 Nothing here is deployed. tlcmap.org has none of the v2 migrations, code, or documentation.
 
-- Deploy order: the three `2026_11_10_*` migrations, then the code. The trigram and GiST indexes
+- Deploy order: the four `2026_11_10_*` migrations, then the code. The trigram, GiST and partial indexes
   are built `CONCURRENTLY` outside a transaction; **a build that fails part-way leaves an invalid
   index, and rerunning the migration skips it** (`IF NOT EXISTS`). Check `indisvalid` after
   migrating and drop and rebuild any invalid index.
@@ -198,25 +233,26 @@ Found in review; deliberately not fixed on this branch (ledger ruling R14).
   `dataitem` could change the plans, and so the ordering where v1 has no `ORDER BY`, of existing v1
   queries. The v1 guard cannot see this at fixture size. Compare v1 plans on a production-sized copy
   before release.
-- **GIN index cost on bulk import.** Two trigram GIN indexes on `dataitem.title` and `placename`
-  slow large layer imports; measure an import before release.
+- **GIN index cost on bulk import.** Three trigram GIN indexes on `dataitem.title`, `placename` and
+  `extended_data` slow large layer imports; measure an import before release. The `extended_data`
+  index took 69 s to build here and will take far longer on production's table.
+- **`extended_data` collation.** The `textmatch` pre-filter's soundness relies on
+  `dataitem.extended_data` having the database's default collation, as `v2_extended_value`'s result
+  does; verified on `tlcmap_test` only. Check production's column before release (ruling R24).
 - **MCP upstream stays on v1** until ⑱ (above).
 
 ### Residuals for the user's decision
 
-1. **Date-filtered catalogue** (request 6). 1.1 s here, up to about 6 s estimated for production
-   against a target of about 2 s. Its cost is the record-level matching join, which must evaluate the
-   date predicate on every dated record to know which layers match and to give `total` and
-   `matching_count`; page-first cannot reduce it. The option within the ruling: parse each date
-   string once for both bounds — a function returning both the first and last instant of a date
-   would halve the date work in the join (the earlier analysis put 3.0 s at about 1.7 s). Not done:
-   the target is the user's call (ledger rulings R16).
-2. **`extended_data` without `layers`** (request 7). 50.9 s here, found while taking this record. The
-   filter applies `v2_extended_value`, an XML parse, to every row of `dataitem` (344,350 with extended
-   data), and nothing narrows the scan; an unindexable expression. Options for the user, none built:
-   require `layers` or another narrowing filter with `extended_data`; add a `max` on the matching
-   work with a `400` that names it; or a stored, indexed extraction of named fields (which contradicts
-   the design's "no derived data" and so needs the user's decision).
+1. **Date-filtered catalogue** (request 6). Still open: 1.1 s here, about 4–5 s estimated for
+   production against a target of about 2 s. Its cost is the record-level matching join, which must
+   evaluate the date predicate on every dated record to know which layers match and to give `total`
+   and `matching_count`; page-first cannot reduce it. Parsing each date once (Task 18) saved only
+   7–15%, because the remaining cost is per-call plpgsql overhead. The next option within "compute at
+   query time" is a date parser written as an inlinable `LANGUAGE sql` function. Fix or re-accept
+   before release (rulings R16, R22).
+2. **`extended_data` without `layers`** (request 7). Fixed by Task 18 (§4.1). What remains grows with
+   the records that genuinely match, which the summary must count: `Years > 20` takes 4.85 s here
+   (ruling R23).
 
 ### Parked minors (review residuals, ledger ruling R18)
 
@@ -230,6 +266,10 @@ Non-blocking; diagnostics or development only.
 - A trailing bare `AND` in `extended_data` is reported as "an operator" rather than "a clause".
 - A development database migrated with the pre-fix version of migration `2026_11_10_000001` keeps an
   orphan function `v2_civil_ms`; harmless, removed by rebuilding.
+- Task 18: the alias `x` names both the date LATERAL and the `>`/`<` derived table inside it
+  (`RecordQuery.php` :64 and :402) — correct by scoping today, but untested in combination; the
+  partial index's condition is written twice (migration `000004` and `RecordQuery.php` :128), and
+  only an `EXPLAIN` test would notice drift.
 
 ### Deferred minors (ledger)
 
@@ -280,3 +320,4 @@ One line each; none blocks.
 
 The 1,000-digit bound either side of the decimal point in an `extended_data` comparison, the
 `encoding` rule, and the route bound of 18 digits on the layer id are in the spec (rulings R17, R18).
+Task 18's function and two indexes are in spec §4, and Task 18 is in the plan.

@@ -12,8 +12,8 @@ any of it.
 [tlcmap-mcp](https://github.com/Systemik-Solutions/tlcmap-mcp), runs on staging at
 `https://test-mcp.tlcmap.org` with one read-only tool, `tlcmap_get_layer`
 ([acceptance record](https://github.com/Systemik-Solutions/tlcmap-mcp/blob/main/docs/acceptance/A0.md),
-2026-11-03). The API half of milestone A1 (API v2) is implemented and reviewed on branch `a1-api-v2`
-of the application, awaiting merge into `tlcmap-api-enhancement`, and not deployed
+2026-11-03). The API half of milestone A1 (API v2) is merged into the application's
+`tlcmap-api-enhancement` branch (2026-11-06), not deployed
 ([spec](documents/specs/A1-API-V2.md),
 [acceptance record](documents/acceptance/A1-API-V2.md)). Nothing in `skills/` exists yet.
 

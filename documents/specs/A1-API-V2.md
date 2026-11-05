@@ -241,9 +241,12 @@ summaries are computed at query time.
 | --- | --- |
 | `tlcmap.v2_udate(text) → bigint` | The first instant of the period a date string names, as epoch milliseconds UTC; `NULL` if empty or unparseable (§6). `IMMUTABLE`, `STRICT`, `PARALLEL SAFE`. Pure arithmetic — no `timestamp` type, so no 4713 BC limit. |
 | `tlcmap.v2_udate_end(text) → bigint` | The last millisecond of that period (§6.2). Same properties. |
+| `tlcmap.v2_udate_range(text) → bigint[]` | `{v2_udate(x), v2_udate_end(x)}` from one parse, for queries that need both bounds of a column. Same properties. |
 | `tlcmap.v2_extended_value(text, text) → text` | The value of the named field in a record's `extended_data` XML, or `NULL` if the field is absent, the column is empty, or the XML is malformed. Catches the XML error rather than raising it. `IMMUTABLE`. |
 | GIST index on `dataitem.geom` | For `bbox`, `polygon` and extents. |
 | GIN `gin_trgm_ops` indexes on `dataitem.title` and `dataitem.placename` | For `match=fuzzy` and for `exact`/`contains`, which are written as `ILIKE` so the index serves them. |
+| GIN `gin_trgm_ops` index on `dataitem.extended_data` | For the `extended_data` pre-filter: before parsing a record's XML, each clause requires the raw text to contain the literal runs of its field name (and of its value, for `=` and `textmatch`), as `LIKE`/`ILIKE`, so only records that can match are parsed. The pre-filter only removes records that cannot match; results are unchanged. |
+| Partial index on `dataitem` for records whose raw `extended_data` may not read as written (character references, a DTD, or a value that is not one CDATA section) | Those records bypass the literal pre-filter and are always parsed; the partial index lets the planner find them without abandoning the trigram index. |
 
 The migration creates the indexes with `CREATE INDEX IF NOT EXISTS`, so a database where an operator
 has already added one is not an error, and drops only what it created on rollback. Index builds on

@@ -1111,3 +1111,18 @@ around in Task 1; and the items deliberately left for later (deployment, ⑱'s r
 - [ ] **Step 5: Commit both repositories' remaining changes**, then use
   superpowers:finishing-a-development-branch to merge `a1-api-v2` into `tlcmap-api-enhancement` —
   never into `main` or `dev`.
+
+### Task 18: Two slow paths — `extended_data` pre-filter, dates parsed once
+
+Added after Task 17's measurements by the user's decision (2026-11-05): no cache, no stored derived
+data, no API change, and every response byte-identical.
+
+- **`extended_data`.** A GIN trigram index on `dataitem.extended_data` (migration
+  `2026_11_10_000004`, built concurrently) and a necessary-condition pre-filter on the raw text before
+  each clause's XML parse, with a fallback (and a partial index) for records whose raw text may not
+  contain an operand literally. Soundness proved from the writing code, by fixtures for each escape
+  form, and by comparing matched ids with and without the pre-filter on `temp_tlcmap`.
+- **Dates.** `tlcmap.v2_udate_range(text)` gives both bounds from one parse, used wherever a query
+  needs both bounds of a column.
+- Measure before and after; record the results in the acceptance record; then merge as Task 17
+  Step 5.
