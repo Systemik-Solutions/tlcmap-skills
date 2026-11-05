@@ -347,7 +347,7 @@ accepts exactly these forms:
 | `[-]Y-MM-DD` | `1856-03-04` | that day |
 | `[-]Y-MM-DDThh:mm[:ss[.fff]]` | `1856-03-04T14:30` | that instant |
 | `D/M/YYYY` (one or two digits for D and M) | `4/3/1856` | that day — day first |
-| `Y-00-00` | `1856-00-00` | that year |
+| `[-]Y-00-00` | `1856-00-00` | that year |
 | `00/00/Y` | `00/00/1856` | that year |
 
 - **Years.** There is no year zero: `0` and `-0` are unparseable. `-Y` is Y BCE, astronomical year
