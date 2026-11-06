@@ -15,7 +15,7 @@ Each part runs against its own TLCMap, with its own dataset, so each names its o
 
 Checked on **2026-11-06**.
 
-**Result: all eight checks pass.** Merged into `main` as `304b884` ([pull request #2](https://github.com/Systemik-Solutions/tlcmap-mcp/pull/2)) on 2026-11-06; CI on the merge commit, run 42178445839, `success`.
+**Result: all eight checks pass.** Merged into `main` as `304b884` ([pull request #2](https://github.com/Systemik-Solutions/tlcmap-mcp/pull/2)) on 2026-11-06; CI on the merge commit, run 42178445839, `success`. Tagged `v0.2.0` on that commit.
 
 A first run, on `21b525d`, passed the same checks but found that Claude Code showed the agent only
 `CODE: message` for a tool error, hiding v2's `details` (check 7). That was fixed in `ed60875`
@@ -259,7 +259,7 @@ Steps (spec §12.2):
 
 1. Run `TLCMAP_BASE_URL=https://test-ghap.tlcmap.org npm run test:compat`.
 2. Choose staging's layers for each role and record them in a roles table.
-3. Set `TLCMAP_BASE_URL=https://test-ghap.tlcmap.org` in `/etc/tlcmap-mcp/env` and deploy 0.2.0 to
+3. Set `TLCMAP_BASE_URL=https://test-ghap.tlcmap.org` in `/etc/tlcmap-mcp/env` and deploy tag `v0.2.0` to
    `test-mcp.tlcmap.org` ([`deploy/DEPLOY.md`](https://github.com/Systemik-Solutions/tlcmap-mcp/blob/main/deploy/DEPLOY.md)).
 4. Repeat checks 2 to 8 against `https://test-mcp.tlcmap.org/mcp` with staging's layers.
 5. Check A0 §13's deploy and rollback for the new release.
