@@ -445,9 +445,15 @@ bodies as `Buffer`s outside the heap, errors never cached).
 
 ### 9.1 The wire shape
 
-A0's, unchanged: a tool failure is a tool result with `isError: true` and
+A0's, with one change: a tool failure is a tool result with `isError: true` and
 `structuredContent: {error: {code, message, details}}`, and a resource-read failure is an MCP
 protocol error carrying the same object in its `data` (A0 §7).
+
+**The change: an error's text block is its serialised `structuredContent`**, as a success's is
+(§4.2), not A0's `CODE: message`. Claude Code passes the agent only the text block of an error
+result, so under A0's form `details` such as `accepts` or `position` never reached the agent (found
+in local acceptance, 2026-11-06). A resource-read failure is unchanged: its message stays
+`CODE: message`, with the whole object in `data`.
 
 ### 9.2 Mapping v2's errors
 
@@ -589,6 +595,7 @@ and query, driven by `@modelcontextprotocol/client` over Streamable HTTP:
 - Following `next_cursor` from page 1 of layer 206 to page 2 visits all 52 ids once.
 - A second identical call is a cache hit with the original `fetched_at`.
 - Every error path of §9 end to end, and `RESOURCE_EXPIRED` and `INVALID_ARGUMENT` on reads.
+- An error result's text block is its serialised `structuredContent`, `details` included (§9.1).
 - A0's transport, health and rate-limit tests continue to pass.
 
 ### 11.4 The compatibility check
