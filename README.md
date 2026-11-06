@@ -16,8 +16,10 @@ any of it.
 `tlcmap-api-enhancement` branch (2026-11-06), not deployed
 ([spec](documents/specs/A1-API-V2.md),
 [acceptance record](documents/acceptance/A1-API-V2.md)). The MCP half of A1 — the server's move to
-v2 and its four discovery and rights tools — is specified
-([spec](documents/specs/A1-MCP.md), [plan](documents/plans/A1-MCP-PLAN.md)). Nothing in `skills/` exists yet.
+v2 and its four discovery and rights tools, version 0.2.0 — is merged into tlcmap-mcp's `main` and
+accepted on the local stack (2026-11-06), not deployed: staging stays on 0.1.0 until v2 is on
+test-ghap ([spec](documents/specs/A1-MCP.md), [plan](documents/plans/A1-MCP-PLAN.md),
+[acceptance record](documents/acceptance/A1-MCP.md)). Nothing in `skills/` exists yet.
 
 ## Documents
 
