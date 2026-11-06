@@ -723,9 +723,9 @@ one contract, two transports.
    holds the model. This keeps prompts, adjudication and confidence banding in one place rather
    than reimplemented in the server — and it is why `tlcmap_resolve_candidates` returns candidates
    rather than a choice.
-2. **Handles and summaries, never bulk.** A tool result returns
-   `{count, extent, date_range, resource_uri}`; features live behind a resource the client
-   fetches only if it needs them (§3.5).
+2. **Handles and summaries, never bulk.** A tool result returns v2's summary of the whole match
+   set (`total`, `extent`, `date_range`, …) and a `resource_uri`; features live behind a resource
+   the client fetches only if it needs them (§3.5).
 3. **The tools expose the API contract, nothing more.** One contract, two transports, so a
    question has the same answer whichever way it is asked. The server has no other route to the
    data (§6.1), so this holds by construction; the rule is what stops a tool from approximating a
@@ -733,8 +733,8 @@ one contract, two transports.
    and reaches both.
 4. **Every result carries provenance** — the equivalent query, the fetch time, the record UIDs.
    An MCP-driven answer must be as retraceable as a skill-driven one.
-5. **Errors are typed and actionable.** `RESULT_TOO_LARGE` carries the total and a suggestion;
-   `FILTER_REJECTED` names the expression it could not parse. This is §5.2 ② surfacing at the tool
+5. **Errors are typed and actionable.** `INVALID_PARAMETER` names the parameter and what it
+   accepts; `FILTER_REJECTED` names the expression it could not parse and where. This is §5.2 ② surfacing at the tool
    layer.
 6. **Read and write are separate scopes from day one**, so the public read-only deployment and an
    authenticated one are the same server configured differently.
@@ -742,7 +742,9 @@ one contract, two transports.
 ### 6.3 The tool surface
 
 Twelve read tools. Six are specified in full — the ones the vertical slice builds (§9) — and six
-are sketched.
+are sketched. The four A1 tools are specified for build in
+[specs/A1-MCP.md](./specs/A1-MCP.md): each input is the v2 parameter of the same name, and each
+output passes v2's own objects through, adding only a resource handle and provenance.
 
 #### `tlcmap_list_layers`
 
@@ -750,12 +752,13 @@ Faceted catalogue search. The tool regional discovery is impossible without.
 
 | | |
 | --- | --- |
-| **In** | `query`, `bbox`, `polygon`, `date_from`, `date_to`, `include_undated`, `record_type`, `creator`, `has_license`, `has_warning`, `min_records`, `limit`, `cursor` |
-| **Out** | `{total, returned, layers[{layer_id, name, description, creator, record_count, bbox, date_range, has_warning, license_present}], cursor, provenance}` |
-| **Errors** | `INVALID_GEOMETRY`, `RESULT_TOO_LARGE` |
+| **In** | `q`, `bbox`, `polygon`, `date_from`, `date_to`, `include_undated`, `record_type`, `creator`, `has_license`, `has_warning`, `min_records`, `sort`, `direction`, `cursor`, `per_page` |
+| **Out** | `{query, total, page, layers[{id, name, description, creator, record_type, record_count, matching_count, bbox, date_range, undated, has_license, has_warning, url}], provenance}` |
+| **Errors** | `INVALID_PARAMETER`, `INVALID_GEOMETRY` |
 
 Every input is a v2 catalogue parameter (§5.2 ①), so the server filters nothing itself. `bbox`
-matches the **computed** extent, never the contributor-declared fields. Returns layer summaries
+tests the layer's **records** — a layer matches when one of its records is in the box — never the
+contributor-declared fields. Returns layer summaries
 only; records come from `tlcmap_get_layer`. `has_license` and `has_warning` report
 presence, **not** an interpretation of content — they let an agent find a region's no-licence
 layers without the server ever deciding what a licence permits.
@@ -766,19 +769,20 @@ Search places across all four sources.
 
 | | |
 | --- | --- |
-| **In** | `name_query`, `match` (`exact`\|`contains`\|`fuzzy`), `sources[]`, `bbox`, `polygon`, `date_from`, `date_to`, `include_undated`, `state`, `lga`, `feature_term`, `record_type`, `layer_ids[]`, `extended_data[]`, `summary_only`, `limit`, `cursor` |
-| **Out** | `{total, returned, extent, date_range, sources_breakdown, layers_present[], places[], resource_uri, provenance}` |
-| **Errors** | `RESULT_TOO_LARGE` (with `total` + narrowing suggestions), `FILTER_REJECTED`, `INVALID_GEOMETRY` |
+| **In** | `name`, `match` (`exact`\|`contains`\|`fuzzy`), `sources[]`, `layers[]`, `bbox`, `polygon`, `date_from`, `date_to`, `include_undated`, `state`, `lga`, `feature_term`, `record_type`, `extended_data`, `summary_only`, `sort`, `direction`, `nulls`, `limit`, `sample`, `seed`, `cursor`, `per_page` |
+| **Out** | `{query, summary{total, extent, no_coordinates_count, date_range, undated, unparseable_dates, by_source, by_layer[]}, page, resource_uri, provenance}` |
+| **Errors** | `INVALID_PARAMETER`, `FILTER_REJECTED`, `INVALID_GEOMETRY`, `LAYER_PRIVATE`, `LAYER_NOT_FOUND` |
 
 `match` replaces the `name`/`containsname`/`fuzzyname` trap — one parameter with three honest
 values rather than three parameters with precedence rules. `include_undated` is explicit rather
-than a silent exclusion. `total`, `extent`, `date_range`, `sources_breakdown` and `layers_present`
-describe the whole match set, not the page, and come from v2's summary (§5.2 ④); `summary_only`
+than a silent exclusion. The `summary` describes the whole match set, not the page, and is v2's
+(§5.2 ④); `summary_only`
 answers "how big is this?" without building features. `date_range` depends on a correct `udateend`
 (⑥). `limit` takes the first N in a stable order (⑧) — there is **no `limit`-as-random-sample** —
-and `cursor` pages through v2 (③), so a result of any size is reachable. `layers_present` gives the
-distinct layers contributing to a result, so an agent can go straight to their rights without
-paging every record.
+and `cursor` pages through v2 (③), so a result of any size is reachable, one page per call; each
+page's records are behind its own `resource_uri`, never inline. `by_layer` gives the distinct layers
+contributing to a result, each with its warning verbatim, so an agent can go straight to their
+rights without paging every record.
 
 #### `tlcmap_get_layer`
 
@@ -786,14 +790,15 @@ A layer's records and metadata.
 
 | | |
 | --- | --- |
-| **In** | `layer_id`, `sort`, `nulls` (`first`\|`last`) |
-| **Out** | `{metadata, record_count, extent, date_range, undated_count, resource_uri, provenance}` |
-| **Errors** | `LAYER_PRIVATE` (403), `LAYER_NOT_FOUND` (404) |
+| **In** | `layer_id`, `sort`, `direction`, `nulls` (`first`\|`last`), `limit`, `cursor`, `per_page` |
+| **Out** | `{layer, query, summary, page, resource_uri, provenance}` |
+| **Errors** | `INVALID_PARAMETER`, `LAYER_PRIVATE` (403), `LAYER_NOT_FOUND` (404) |
 
-Summary plus a resource handle; never inline features. `nulls=last` (§5.2 ⑦) stops sorting from
-silently deleting undated records. `undated_count` is explicit so the exclusion can be reported
-rather than discovered. A layer's records within a region are a `tlcmap_search_places` query with
-`layer_ids[]` and `bbox`, so this tool takes no geometry filter. v2 pages a layer's features, so there
+The layer's metadata and the summary of the whole layer, plus one page of its records behind a
+resource handle; never inline features. `nulls=last` (§5.2 ⑦) stops sorting from silently deleting
+undated records. The summary's `undated` counts are explicit so the exclusion can be reported rather
+than discovered. A layer's records within a region are a `tlcmap_search_places` query with
+`layers[]` and `bbox`, so this tool takes no geometry filter. v2 pages a layer's features, so there
 is no `line`: a client draws a route or timeline line from the ordered points.
 
 #### `tlcmap_get_layer_metadata`
@@ -803,7 +808,7 @@ Rights, licence, citation and warning, without building any features.
 | | |
 | --- | --- |
 | **In** | `layer_id` |
-| **Out** | `{name, creator, publisher, contact, citation, license, rights, doi, warning, temporal_extent, spatial_extent, record_count, provenance}` |
+| **Out** | `{layer{id, name, description, subject_keywords, record_type, creator, publisher, contact, citation, doi, source_url, linkback, license, rights, language, warning, declared, created, created_at, updated_at, url}, summary, provenance}` |
 | **Errors** | `LAYER_PRIVATE` (403), `LAYER_NOT_FOUND` (404) |
 
 Cheap by design, so an agent can check rights *before* fetching data — which is what makes §3.3's
@@ -871,10 +876,14 @@ Bulk payloads are MCP resources with stable URIs, not tool results:
 
 | Resource | Holds |
 | --- | --- |
-| `tlcmap://search/{query_hash}` | The full feature collection for a search |
-| `tlcmap://layer/{id}/features` | A layer's records |
+| `tlcmap://search/{sha256}` | One page of a search's features, exactly as v2 sent it |
+| `tlcmap://layer/{id}/features/{sha256}` | One page of a layer's records, exactly as v2 sent it |
 | `tlcmap://layer/{id}/text` | An uploaded text's full content |
 | `tlcmap://layer/{id}/crate` | The RO-Crate snapshot |
+
+v2 pages features, so a handle names one page, and a whole layer or search is the sequence of its
+pages; the server never assembles them. A page's handle is named by the SHA-256 of its bytes, so a
+URI only ever names one state of the data.
 
 The server keeps no database, so it holds resource payloads in its own cache for a fixed period.
 A resource expires rather than being silently rebuilt: a client holding an expired URI calls the
@@ -1237,7 +1246,8 @@ upstream moves from the current API to v2.
 *Skills:* `tlcmap-search`, `tlcmap-cite`.
 *Evidence:* ground truth from a one-off exhaustive extent harvest, held in `evals/` and never
 shipped (§9.5).
-The API half is specified in [specs/A1-API-V2.md](./specs/A1-API-V2.md).
+The API half is specified in [specs/A1-API-V2.md](./specs/A1-API-V2.md), the MCP half in
+[specs/A1-MCP.md](./specs/A1-MCP.md).
 
 **Deliverable:** a rights-complete inventory of everything TLCMap holds for the Hunter Valley — 36
 layers, 273 contributed records plus the gazetteer — with attribution and warnings verbatim, the

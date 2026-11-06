@@ -947,8 +947,9 @@ The MCP half of A1 is written against this contract. In summary:
   is v2's cursor, passed through.
 - **Summaries come from v2**: `total`, `extent`, `date_range`, `by_source` and `by_layer` (the tool's
   `sources_breakdown` and `layers_present`) — the server computes none of them.
-- **Layer features are paged**, so `tlcmap://layer/{id}/features` is assembled from pages; the layer
-  object, with its warning, is on every page.
+- **Layer features are paged**, so the server serves them one page per call, each page behind its
+  own handle ([A1 MCP spec §6](./A1-MCP.md#6-resources)); the layer object, with its warning, is on
+  every page.
 - `line` is not offered; `tlcmap_get_layer` drops it (§17).
 - **Rate limit**: the interim v2 limit is 60 a minute per address (§12). The server's upstream must
   not move to v2 where that would throttle it; raising it is configuration until ⑱.

@@ -15,7 +15,9 @@ any of it.
 2026-11-03). The API half of milestone A1 (API v2) is merged into the application's
 `tlcmap-api-enhancement` branch (2026-11-06), not deployed
 ([spec](documents/specs/A1-API-V2.md),
-[acceptance record](documents/acceptance/A1-API-V2.md)). Nothing in `skills/` exists yet.
+[acceptance record](documents/acceptance/A1-API-V2.md)). The MCP half of A1 — the server's move to
+v2 and its four discovery and rights tools — is specified
+([spec](documents/specs/A1-MCP.md)). Nothing in `skills/` exists yet.
 
 ## Documents
 
@@ -28,6 +30,7 @@ any of it.
 | [documents/specs/A1-API-V2.md](documents/specs/A1-API-V2.md) | The API half of milestone A1 — the first API v2 endpoints, items ① to ⑧ |
 | [documents/plans/A1-API-V2-PLAN.md](documents/plans/A1-API-V2-PLAN.md) | The task-by-task implementation plan for the A1 API half |
 | [documents/acceptance/A1-API-V2.md](documents/acceptance/A1-API-V2.md) | The acceptance record for the A1 API half — tests mapped to items ① to ⑧, performance notes, what is left for later |
+| [documents/specs/A1-MCP.md](documents/specs/A1-MCP.md) | The MCP half of milestone A1 — the server's upstream moved to v2, and its four discovery and rights tools |
 | [documents/LARAVEL-UPGRADE.md](documents/LARAVEL-UPGRADE.md) | Upgrading the TLCMap application from Laravel 5.8 to 13, with a time estimate — deferred to a later phase; nothing here depends on it |
 
 Read DESIGN.md first. USE-CASES.md is the detail behind its §8.
