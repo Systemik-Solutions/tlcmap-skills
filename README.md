@@ -11,7 +11,7 @@ any of it.
 **Design complete; milestone A0 done.** The MCP server skeleton,
 [tlcmap-mcp](https://github.com/Systemik-Solutions/tlcmap-mcp), runs on staging at
 `https://test-mcp.tlcmap.org` with one read-only tool, `tlcmap_get_layer`
-([acceptance record](https://github.com/Systemik-Solutions/tlcmap-mcp/blob/main/docs/acceptance/A0.md),
+([acceptance record](documents/acceptance/A0-SERVER-SKELETON.md),
 2026-11-03). The API half of milestone A1 (API v2) is merged into the application's
 `tlcmap-api-enhancement` branch (2026-11-06), not deployed
 ([spec](documents/specs/A1-API-V2.md),
@@ -27,11 +27,13 @@ v2 and its four discovery and rights tools — is specified
 | [documents/USE-CASES.md](documents/USE-CASES.md) | The eight research use cases in full, with example prompts and worked examples from real TLCMap data |
 | [documents/specs/A0-SERVER-SKELETON.md](documents/specs/A0-SERVER-SKELETON.md) | Milestone A0 expanded into a buildable spec — the MCP server skeleton and its staging deployment |
 | [documents/plans/A0-SERVER-SKELETON-PLAN.md](documents/plans/A0-SERVER-SKELETON-PLAN.md) | The task-by-task implementation plan for A0 |
+| [documents/acceptance/A0-SERVER-SKELETON.md](documents/acceptance/A0-SERVER-SKELETON.md) | The acceptance record for A0 — the eight checks against staging |
 | [documents/specs/A1-API-V2.md](documents/specs/A1-API-V2.md) | The API half of milestone A1 — the first API v2 endpoints, items ① to ⑧ |
 | [documents/plans/A1-API-V2-PLAN.md](documents/plans/A1-API-V2-PLAN.md) | The task-by-task implementation plan for the A1 API half |
 | [documents/acceptance/A1-API-V2.md](documents/acceptance/A1-API-V2.md) | The acceptance record for the A1 API half — tests mapped to items ① to ⑧, performance notes, what is left for later |
 | [documents/specs/A1-MCP.md](documents/specs/A1-MCP.md) | The MCP half of milestone A1 — the server's upstream moved to v2, and its four discovery and rights tools |
 | [documents/plans/A1-MCP-PLAN.md](documents/plans/A1-MCP-PLAN.md) | The task-by-task implementation plan for the A1 MCP half |
+| [documents/acceptance/A1-MCP.md](documents/acceptance/A1-MCP.md) | The acceptance record for the A1 MCP half — local, staging and production |
 | [documents/LARAVEL-UPGRADE.md](documents/LARAVEL-UPGRADE.md) | Upgrading the TLCMap application from Laravel 5.8 to 13, with a time estimate — deferred to a later phase; nothing here depends on it |
 
 Read DESIGN.md first. USE-CASES.md is the detail behind its §8.

@@ -611,7 +611,8 @@ from then on it is how the server learns that v2 changed
 
 ## 12. Acceptance
 
-Recorded with the date in `tlcmap-mcp/docs/acceptance/A1.md`, beside A0's, in three parts. Each part
+Recorded with the date in [`documents/acceptance/A1-MCP.md`](../acceptance/A1-MCP.md) in this
+repository, beside A0's, in three parts. Each part
 names the layers that play each role in its own dataset.
 
 | Role | Local |

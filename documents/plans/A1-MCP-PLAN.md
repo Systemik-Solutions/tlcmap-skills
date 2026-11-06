@@ -99,7 +99,6 @@ test/helpers/v2-fixtures.ts   NEW   fixture loaders and a fetch stub serving the
 test/fake-tlcmap.ts           MODIFIED  path+query routes from the manifest
 test/compat/compat.test.ts    NEW   replaces test/prod/compat.test.ts
 vitest.compat.config.ts       NEW   replaces vitest.prod.config.ts
-docs/acceptance/A1.md         NEW
 ```
 
 ---
@@ -753,7 +752,7 @@ export function searchPlacesTool(deps: ToolDeps): Registration;
 ### Task 11: Local acceptance, the record, and the merge
 
 **Files:**
-- Create: `docs/acceptance/A1.md`
+- In `tlcmap-skills`: create `documents/acceptance/A1-MCP.md`
 - In `tlcmap-skills`: modify `README.md` (status)
 
 - [ ] **Step 1: Prepare the stack.** In `C:\laragon\www\tlcmap-ghap\.env` (git-ignored) set
@@ -766,7 +765,7 @@ export function searchPlacesTool(deps: ToolDeps): Registration;
   afterwards). For each, capture the tool output and the matching `curl` of the v2 request, and the
   server's `tool` and `upstream` log lines. Check 1's CI is the pull request's (Step 4); run
   `test:compat` against local v2 here. Check 8 restarts the server process.
-- [ ] **Step 3: Write `docs/acceptance/A1.md`** in A0's record format: commit, served version, Node,
+- [ ] **Step 3: Write `tlcmap-skills/documents/acceptance/A1-MCP.md`** in A0's record format: commit, served version, Node,
   the upstream (`http://tlcmap-ghap.laragon.local`, `tlcmap-ghap` commit, database), the roles table
   of spec §12 with the local layers, and three parts — **Local** (each check with its evidence and
   PASS or FAIL), **Staging** and **Production**, each marked pending with spec §10's prerequisites
@@ -776,5 +775,5 @@ export function searchPlacesTool(deps: ToolDeps): Registration;
   body linking the spec and the record. Expected: CI green. Record the run in check 1 and commit.
 - [ ] **Step 5: Merge** once the user approves the pull request.
 - [ ] **Step 6: Update `tlcmap-skills`.** The README status says the MCP half of A1 is accepted on the
-  local stack (with the date) and not deployed, linking `tlcmap-mcp/docs/acceptance/A1.md`. Commit in
+  local stack (with the date) and not deployed, linking `documents/acceptance/A1-MCP.md`. Commit in
   `tlcmap-skills`: `git commit -m "Record the local acceptance of the A1 MCP half"`.
