@@ -17,9 +17,13 @@ Checked on **2026-11-06**.
 
 **Result: all eight checks pass.**
 
+A first run, on `21b525d`, passed the same checks but found that Claude Code showed the agent only
+`CODE: message` for a tool error, hiding v2's `details` (check 7). That was fixed in `ed60875`
+(spec §9.1 amended), and every check below was run again on that commit.
+
 | | |
 | --- | --- |
-| Commit | `21b525dfe04d0f8f2fa1c98f04397b5a7fc31dd2` (branch `a1-mcp`) |
+| Commit | `ed60875` (branch `a1-mcp`) |
 | Served version | `0.2.0` (`/healthz` and the `startup` log line) |
 | Node | `v24.12.0` (Windows 11) |
 | Upstream | `http://tlcmap-ghap.laragon.local`, branch `tlcmap-api-enhancement` at `9209514d73f932b8d762ec11f6c5ac350528fc7f` |
@@ -31,7 +35,7 @@ Checked on **2026-11-06**.
 Started with:
 
 ```text
-PUBLIC_URL=http://localhost:3100 TLCMAP_BASE_URL=http://tlcmap-ghap.laragon.local npm start
+PUBLIC_URL=http://localhost:3100 TLCMAP_BASE_URL=http://tlcmap-ghap.laragon.local node dist/index.js
 {"level":"info","event":"startup","version":"0.2.0","scopes":["read"],"host":"127.0.0.1","port":3100,...}
 ```
 
@@ -54,17 +58,15 @@ tools and the MCP resource tools allowed. Its `stream-json` output records each 
 verbatim, as the agent received it. A script then compared those results in code with `curl` of
 the request named in each result's `provenance.request`: totals, ids, `sha256` of the bytes, and
 v2's objects by serialised equality, key order included. No number below was transcribed by a
-model. An SDK client read the resources byte for byte and called the error cases a second time, to
-show the error result's `structuredContent`, which Claude Code does not display (see the note under
-check 7).
+model. An SDK client also read the resources byte for byte and called the error cases a second
+time, to compare the text block Claude Code received with the result's `structuredContent`.
 
 ### 1. CI is green, and `npm run test:compat` passes against local v2 — PASS
 
-- CI on [pull request #2](https://github.com/Systemik-Solutions/tlcmap-mcp/pull/2): run
-  42172378434 (`pull_request`) and run 42172348615 (`push`), both on `8ff76d5` (this record's first
-  commit, whose code is `21b525d`'s), both `success`.
-- Workstation, on `21b525d`: `npm run typecheck`, `npm run lint` and `npm test` pass (17 files,
-  225 tests).
+- CI on [pull request #2](https://github.com/Systemik-Solutions/tlcmap-mcp/pull/2): run 42174070463
+  (`pull_request`) and run 42174063626 (`push`), both on `ed60875`, both `success`.
+- Workstation, on `ed60875`: `npm run typecheck`, `npm run lint` and `npm test` pass (17 files,
+  228 tests).
 - `TLCMAP_BASE_URL=http://tlcmap-ghap.laragon.local npm run test:compat`:
 
 ```text
@@ -152,7 +154,9 @@ bytes.
 
 ### 7. Errors carry v2's code, message and details — PASS
 
-Each `structuredContent.error` (SDK client) against `curl` of the request it names:
+Each `structuredContent.error` (SDK client) against `curl` of the request it names. For each,
+Claude Code's text block, as the agent received it, is exactly `JSON.stringify(structuredContent)`,
+`details` included:
 
 ```text
 tlcmap_get_layer_metadata {"layer_id":33}
@@ -181,12 +185,16 @@ tlcmap_get_layer {"layer_id":206,"per_page":6000}
 In each, the code and message are v2's and every one of v2's detail keys is present with v2's
 value, plus `request` and `status`.
 
-**Note: what Claude Code shows the agent.** For an error, Claude Code passes the agent only the
-result's text block, `CODE: message`, for example
-`INVALID_PARAMETER: The parameter 'per_page' must be between 1 and 5000.` The `details` in
-`structuredContent` do not reach it. That is A0's wire shape (spec §9.1), unchanged. v2's messages
-already name the parameter and the rule, so the agent still learns what to change, but `details`
-such as `accepts` or `position` are seen only by clients that read `structuredContent`.
+Asked to print each error's code and `details` as it received them, the Claude Code agent printed,
+for example:
+
+```text
+INVALID_PARAMETER
+{"parameter":"per_page","rule":"range","accepts":"1–5000","request":"GET http://tlcmap-ghap.laragon.local/api/v2/layers/206/features?per_page=6000","status":400}
+```
+
+On the first run (`21b525d`) the text block was A0's `CODE: message`, and the agent saw only
+`INVALID_PARAMETER: The parameter 'per_page' must be between 1 and 5000.`
 
 ### Server log
 
@@ -194,14 +202,14 @@ Every call logged one `upstream` and one `tool` line; there were 20 of each acro
 the SDK's second pass. Extract:
 
 ```text
-{"level":"info","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers?bbox=150.8,-33.1,151.4,-32.6","status":200,"bytes":4898,"queue_wait_ms":0,"duration_ms":689}
-{"level":"info","event":"tool","tool":"tlcmap_list_layers","arguments":{"bbox":[150.8,-33.1,151.4,-32.6]},"outcome":"ok","cache":"miss","duration_ms":693}
-{"level":"info","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers/461/features?per_page=5000","status":200,"bytes":4006726,"queue_wait_ms":0,"duration_ms":2572}
-{"level":"info","event":"tool","tool":"tlcmap_get_layer","arguments":{"layer_id":461,"per_page":5000},"outcome":"ok","cache":"miss","duration_ms":2625}
-{"level":"warn","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers/33","outcome":"LAYER_PRIVATE","duration_ms":414}
-{"level":"warn","event":"tool","tool":"tlcmap_get_layer_metadata","arguments":{"layer_id":33},"outcome":"LAYER_PRIVATE","duration_ms":414}
-{"level":"warn","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers/206/features?per_page=6000","outcome":"INVALID_PARAMETER","duration_ms":381}
-{"level":"warn","event":"tool","tool":"tlcmap_get_layer","arguments":{"layer_id":206,"per_page":6000},"outcome":"INVALID_PARAMETER","duration_ms":392}
+{"level":"info","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers?bbox=150.8,-33.1,151.4,-32.6","status":200,"bytes":4898,"queue_wait_ms":0,"duration_ms":716}
+{"level":"info","event":"tool","tool":"tlcmap_list_layers","arguments":{"bbox":[150.8,-33.1,151.4,-32.6]},"outcome":"ok","cache":"miss","duration_ms":719}
+{"level":"info","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers/461/features?per_page=5000","status":200,"bytes":4006726,"queue_wait_ms":0,"duration_ms":2431}
+{"level":"info","event":"tool","tool":"tlcmap_get_layer","arguments":{"layer_id":461,"per_page":5000},"outcome":"ok","cache":"miss","duration_ms":2480}
+{"level":"warn","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers/33","outcome":"LAYER_PRIVATE","duration_ms":468}
+{"level":"warn","event":"tool","tool":"tlcmap_get_layer_metadata","arguments":{"layer_id":33},"outcome":"LAYER_PRIVATE","duration_ms":468}
+{"level":"warn","event":"upstream","url":"http://tlcmap-ghap.laragon.local/api/v2/layers/206/features?per_page=6000","outcome":"INVALID_PARAMETER","duration_ms":464}
+{"level":"warn","event":"tool","tool":"tlcmap_get_layer","arguments":{"layer_id":206,"per_page":6000},"outcome":"INVALID_PARAMETER","duration_ms":464}
 ```
 
 `/healthz` afterwards showed `last_error` `null` and `last_success_at` at the time of the last `400`
@@ -209,7 +217,7 @@ the SDK's second pass. Extract:
 
 ```json
 {"status":"ok","version":"0.2.0","cache":{"entries":12,"bytes":14443109},
- "upstream":{"requests_total":20,"in_flight":0,"queued":0,"last_success_at":"2026-11-06T06:03:58.050Z","last_error":null}}
+ "upstream":{"requests_total":20,"in_flight":0,"queued":0,"last_success_at":"2026-11-06T06:21:58.143Z","last_error":null}}
 ```
 
 ### 8. After a restart, earlier resource URIs return `RESOURCE_EXPIRED` — PASS
@@ -221,16 +229,16 @@ Windows the process was ended with `taskkill /F`, so no `shutdown` line was logg
 ```json
 {"code":-32603,
  "message":"RESOURCE_EXPIRED: This resource is no longer held by the server. Call tlcmap_search_places again to obtain a fresh handle.",
- "data":{"code":"RESOURCE_EXPIRED","details":{"uri":"tlcmap://search/65a6d159a0e38a529ed98923fbdf79f7893b47315a35e2d111fe75048deba024","tool":"tlcmap_search_places"}}}
+ "data":{"code":"RESOURCE_EXPIRED","message":"…","details":{"uri":"tlcmap://search/65a6d159a0e38a529ed98923fbdf79f7893b47315a35e2d111fe75048deba024","tool":"tlcmap_search_places"}}}
 {"code":-32603,
  "message":"RESOURCE_EXPIRED: This resource is no longer held by the server. Call tlcmap_get_layer again to obtain a fresh handle.",
- "data":{"code":"RESOURCE_EXPIRED","details":{"uri":"tlcmap://layer/206/features/a10b2027aaf71ee28941749a9a43c63f331de62d0f47581007f0e1e35263b1f5","tool":"tlcmap_get_layer"}}}
+ "data":{"code":"RESOURCE_EXPIRED","message":"…","details":{"uri":"tlcmap://layer/206/features/a10b2027aaf71ee28941749a9a43c63f331de62d0f47581007f0e1e35263b1f5","tool":"tlcmap_get_layer"}}}
 ```
 
 A second Claude Code session read the search handle and received
 `RESOURCE_EXPIRED: This resource is no longer held by the server. Call tlcmap_search_places again to obtain a fresh handle.`
 The server logged
-`{"level":"warn","event":"resource","uri":"tlcmap://search/65a6…a024","outcome":"RESOURCE_EXPIRED","duration_ms":1}`.
+`{"level":"warn","event":"resource","uri":"tlcmap://search/65a6…a024","outcome":"RESOURCE_EXPIRED","duration_ms":0}`.
 
 ## Staging
 
