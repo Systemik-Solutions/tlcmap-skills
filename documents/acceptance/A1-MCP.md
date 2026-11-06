@@ -15,7 +15,7 @@ Each part runs against its own TLCMap, with its own dataset, so each names its o
 
 Checked on **2026-11-06**.
 
-**Result: all eight checks pass.**
+**Result: all eight checks pass.** Merged into `main` as `304b884` ([pull request #2](https://github.com/Systemik-Solutions/tlcmap-mcp/pull/2)) on 2026-11-06; CI on the merge commit, run 42178445839, `success`.
 
 A first run, on `21b525d`, passed the same checks but found that Claude Code showed the agent only
 `CODE: message` for a tool error, hiding v2's `details` (check 7). That was fixed in `ed60875`
