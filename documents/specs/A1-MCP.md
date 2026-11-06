@@ -463,7 +463,7 @@ decide anything.
 | `403 LAYER_PRIVATE` | `LAYER_PRIVATE` | As above (`layer_id`). Also a private id in a search's `layers`. |
 | `404 LAYER_NOT_FOUND` | `LAYER_NOT_FOUND` | As above (`layer_id`). Also a missing id in a search's `layers`. |
 | `429 RATE_LIMITED`, any `5xx`, a timeout, a network failure | `UPSTREAM_UNAVAILABLE` | `request`, `status` if any, elapsed time, and `retry_after` from the `Retry-After` header if sent. |
-| Any `3xx`; `404 NOT_FOUND` or `405 METHOD_NOT_ALLOWED`; any other status; a status whose body is not v2's error shape or whose `code` does not belong with that status; a `2xx` that fails §4.4 | `UPSTREAM_CONTRACT_VIOLATION` | `request`, `status`; `location` for a `3xx`; v2's body as `api_body` when it is JSON. |
+| Any `3xx`; `404 NOT_FOUND` or `405 METHOD_NOT_ALLOWED`; any other status; a status whose body is not v2's error shape or whose `code` does not belong with that status; a `2xx` that fails §4.4 | `UPSTREAM_CONTRACT_VIOLATION` | `request`, `status`; `location` for a `3xx`; for any other non-`2xx`, v2's body as `api_body` when it is JSON; for a `2xx`, `expected`, naming the check that failed — never the body, which can be megabytes. |
 
 `404 NOT_FOUND` and `405` mean the server built a URL v2 does not route, which is the server's
 fault, not the caller's. Redirects are never followed (②).
